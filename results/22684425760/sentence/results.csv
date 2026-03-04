@@ -1,0 +1,4 @@
+name,track,accuracy,macro_f1,qwk,latency_ms,note
+Exp 0 – Majority,sentence,0.332667,0.083208,0.0,0.0,majority=B2
+Exp 1 – TF-IDF+LR,sentence,0.528472,0.426547,0.663311,0.179,
+Exp 5 – Hybrid (mean_prob),sentence,0.528472,0.426655,0.663005,2.149,
