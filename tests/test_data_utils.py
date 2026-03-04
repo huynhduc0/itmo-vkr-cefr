@@ -8,6 +8,7 @@ from src.config import CEFR_LEVELS, LABEL2ID
 from src.data_utils import (
     get_label_distribution,
     normalize_label,
+    remove_duplicates,
     set_seed,
     stratified_split,
 )
@@ -103,3 +104,37 @@ class TestSetSeed:
     def test_set_seed_runs(self):
         set_seed(42)
         set_seed(0)
+
+
+class TestRemoveDuplicates:
+    def test_removes_exact_duplicates(self):
+        texts = ["hello", "world", "hello"]
+        labels = [0, 1, 0]
+        out_t, out_l = remove_duplicates(texts, labels)
+        assert out_t == ["hello", "world"]
+        assert out_l == [0, 1]
+
+    def test_same_text_different_label_kept(self):
+        texts = ["hello", "hello"]
+        labels = [0, 1]
+        out_t, out_l = remove_duplicates(texts, labels)
+        assert len(out_t) == 2
+
+    def test_preserves_order(self):
+        texts = ["c", "a", "b", "a"]
+        labels = [2, 0, 1, 0]
+        out_t, out_l = remove_duplicates(texts, labels)
+        assert out_t == ["c", "a", "b"]
+        assert out_l == [2, 0, 1]
+
+    def test_no_duplicates_unchanged(self):
+        texts = ["x", "y", "z"]
+        labels = [0, 1, 2]
+        out_t, out_l = remove_duplicates(texts, labels)
+        assert out_t == texts
+        assert out_l == labels
+
+    def test_empty_input(self):
+        out_t, out_l = remove_duplicates([], [])
+        assert out_t == []
+        assert out_l == []

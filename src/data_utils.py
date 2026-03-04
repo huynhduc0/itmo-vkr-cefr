@@ -124,6 +124,7 @@ def load_and_split_dataset(
     val_ratio: float = VAL_RATIO,
     test_ratio: float = TEST_RATIO,
     seed: int = RANDOM_SEED,
+    deduplicate: bool = True,
 ) -> Tuple[
     Tuple[List[str], List[int]],
     Tuple[List[str], List[int]],
@@ -131,12 +132,17 @@ def load_and_split_dataset(
 ]:
     """
     Load dataset and perform stratified split in one step.
+
+    Args:
+        deduplicate: if True, remove duplicate (text, label) pairs before splitting.
     """
     texts, labels = load_dataset(
         dataset_name=dataset_name,
         text_column=text_column,
         label_column=label_column,
     )
+    if deduplicate:
+        texts, labels = remove_duplicates(texts, labels)
     return stratified_split(
         texts,
         labels,
@@ -153,3 +159,52 @@ def get_label_distribution(labels: List[int]) -> Dict[str, int]:
     for label_id in labels:
         dist[ID2LABEL[label_id]] += 1
     return dist
+
+
+def remove_duplicates(
+    texts: List[str],
+    labels: List[int],
+) -> Tuple[List[str], List[int]]:
+    """
+    Remove duplicate (text, label) pairs while preserving order.
+
+    Returns:
+        Deduplicated (texts, labels) lists.
+    """
+    seen = set()
+    out_texts: List[str] = []
+    out_labels: List[int] = []
+    for text, label in zip(texts, labels):
+        key = (text, label)
+        if key not in seen:
+            seen.add(key)
+            out_texts.append(text)
+            out_labels.append(label)
+    return out_texts, out_labels
+
+
+def load_multiple_datasets(
+    dataset_names: List[str],
+    text_column: str = DATASET_CONFIG["text_column"],
+    label_column: str = DATASET_CONFIG["label_column"],
+) -> Tuple[List[str], List[int]]:
+    """
+    Load and concatenate multiple HuggingFace datasets.
+
+    Useful for domain transfer experiments where data comes from
+    different UniversalCEFR subcorpora.
+
+    Returns:
+        Combined (texts, labels) across all datasets.
+    """
+    all_texts: List[str] = []
+    all_labels: List[int] = []
+    for name in dataset_names:
+        texts, labels = load_dataset(
+            dataset_name=name,
+            text_column=text_column,
+            label_column=label_column,
+        )
+        all_texts.extend(texts)
+        all_labels.extend(labels)
+    return all_texts, all_labels
