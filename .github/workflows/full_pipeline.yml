@@ -55,7 +55,9 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 – Data preparation
 # Downloads the UniversalCEFR dataset, tokenises with roberta-base,
-# applies length-based track filtering, and saves JSONL splits.
+# applies length-based track filtering, and saves JSONL splits for BOTH
+# the sentence and essay tracks.  The artifact is named 'prepared-data'
+# (no task suffix) because both tracks are always generated together.
 # ─────────────────────────────────────────────────────────────────────────────
   prepare-data:
     name: Prepare data
@@ -87,10 +89,10 @@ jobs:
             --dataset "${{ inputs.dataset }}" \
             --output  data/
 
-      - name: Upload prepared splits
+      - name: Upload prepared splits (both tracks)
         uses: actions/upload-artifact@v4
         with:
-          name: prepared-data-${{ inputs.task }}
+          name: prepared-data
           path: data/
           retention-days: 7
 
@@ -125,7 +127,7 @@ jobs:
       - name: Download prepared splits
         uses: actions/download-artifact@v4
         with:
-          name: prepared-data-${{ inputs.task }}
+          name: prepared-data
           path: data/
 
       - name: Run CPU experiments (Exp 0, 1, 5 from JSONL)
@@ -141,9 +143,10 @@ jobs:
           done
           if [[ -n "$CPU_EXPS" ]]; then
             python -m src.run_experiments \
-              --task    "${{ inputs.task }}" \
-              --exps    $CPU_EXPS \
-              --data_dir data/ \
+              --task        "${{ inputs.task }}" \
+              --exps        $CPU_EXPS \
+              --data_dir    data/ \
+              --save_results results/ \
               2>&1 | tee results_cpu.txt
           else
             echo "No CPU-safe experiments (0,1,5) requested – skipping."
@@ -157,16 +160,20 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           python -m src.run_experiments \
-            --task    "${{ inputs.task }}" \
-            --exps    6 \
-            --dataset "${{ inputs.dataset }}" \
+            --task         "${{ inputs.task }}" \
+            --exps         6 \
+            --dataset      "${{ inputs.dataset }}" \
+            --save_results results/ \
             2>&1 | tee results_exp6.txt
 
       - name: Upload CPU experiment results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: results-cpu-${{ inputs.task }}
-          path: "results_*.txt"
+          path: |
+            results_*.txt
+            results/
           if-no-files-found: ignore
           retention-days: 30
 
@@ -197,7 +204,7 @@ jobs:
       - name: Download prepared splits
         uses: actions/download-artifact@v4
         with:
-          name: prepared-data-${{ inputs.task }}
+          name: prepared-data
           path: data/
 
       - name: Run transformer experiments
@@ -211,17 +218,21 @@ jobs:
             fi
           done
           python -m src.run_experiments \
-            --task      "${{ inputs.task }}" \
-            --exps      $TRANS_EXPS \
-            --data_dir  data/ \
-            --epochs    "${{ inputs.epochs }}" \
+            --task         "${{ inputs.task }}" \
+            --exps         $TRANS_EXPS \
+            --data_dir     data/ \
+            --epochs       "${{ inputs.epochs }}" \
+            --save_results results/ \
             2>&1 | tee results_transformer.txt
 
       - name: Upload transformer results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: results-transformer-${{ inputs.task }}
-          path: results_transformer.txt
+          path: |
+            results_transformer.txt
+            results/
           retention-days: 30
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -251,7 +262,7 @@ jobs:
       - name: Download prepared splits
         uses: actions/download-artifact@v4
         with:
-          name: prepared-data-${{ inputs.task }}
+          name: prepared-data
           path: data/
 
       - name: Login to HuggingFace Hub
@@ -276,15 +287,99 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python -m src.run_experiments \
-            --task     "${{ inputs.task }}" \
-            --exps     4 \
-            --data_dir data/ \
-            --epochs   "${{ inputs.epochs }}" \
+            --task         "${{ inputs.task }}" \
+            --exps         4 \
+            --data_dir     data/ \
+            --epochs       "${{ inputs.epochs }}" \
+            --save_results results/ \
             2>&1 | tee results_llm.txt
 
       - name: Upload LLM results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: results-llm-${{ inputs.task }}
-          path: results_llm.txt
+          path: |
+            results_llm.txt
+            results/
           retention-days: 30
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 6 – Commit all results back to the repository
+# Runs after every experiment stage (even if some were skipped or failed).
+# Downloads every results-* artifact and commits the files under
+#   results/{run_id}/{task}/
+# so that experiment outcomes are permanently tracked in git.
+# ─────────────────────────────────────────────────────────────────────────────
+  commit-results:
+    name: Commit results to repository
+    runs-on: ubuntu-latest
+    needs:
+      - run-cpu-experiments
+      - run-transformer-experiments
+      - run-llm-experiment
+    # Run even when upstream jobs were skipped or failed so results are always saved.
+    if: always()
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all experiment result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          path: results-raw/
+          merge-multiple: false
+        continue-on-error: true
+
+      - name: Organize results into results/{run_id}/{task}/
+        run: |
+          RUNDIR="results/${{ github.run_id }}/${{ inputs.task }}"
+          mkdir -p "$RUNDIR"
+
+          # Flatten all JSON, CSV and TXT files from downloaded artifacts
+          if [ -d results-raw ]; then
+            find results-raw/ \( -name "*.json" -o -name "*.csv" -o -name "*.txt" \) \
+              -exec cp {} "$RUNDIR/" \;
+          fi
+
+          # Write run metadata so every result folder is self-describing
+          cat > "$RUNDIR/run_info.json" <<EOF
+          {
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "task": "${{ inputs.task }}",
+            "exps": "${{ inputs.exps }}",
+            "dataset": "${{ inputs.dataset }}",
+            "triggered_by": "${{ github.actor }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          echo "Contents of $RUNDIR:"
+          ls -lh "$RUNDIR"
+
+      - name: Commit and push results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/
+          # Only commit if there are staged changes
+          if git diff --staged --quiet; then
+            echo "No new result files to commit – nothing to push."
+          else
+            git commit -m "ci: save experiment results run #${{ github.run_number }} (task=${{ inputs.task }}, exps=${{ inputs.exps }}) [skip ci]"
+            # Pull with rebase first to handle concurrent pipeline runs on the same branch,
+            # then push. Retry once on conflict.
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push || (git pull --rebase origin "${GITHUB_REF_NAME}" && git push)
+            echo "Results committed and pushed to ${{ github.ref }}."
+          fi
+

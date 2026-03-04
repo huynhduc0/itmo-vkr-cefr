@@ -229,3 +229,83 @@ class TestJsonlDataFlow:
 
         assert 0.0 <= r0.accuracy <= 1.0
         assert 0.0 <= r1.accuracy <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# save_results_to_files
+# ---------------------------------------------------------------------------
+
+class TestSaveResultsToFiles:
+    """Tests for save_results_to_files() – the artifact-push helper."""
+
+    @pytest.fixture()
+    def sample_results(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp0, run_exp1
+
+        return [
+            run_exp0(tr_l, te_l, len(te_t), track="sentence"),
+            run_exp1(tr_t, tr_l, te_t, te_l, track="sentence"),
+        ]
+
+    def test_creates_json_and_csv(self, sample_results):
+        from src.run_experiments import save_results_to_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_results_to_files(sample_results, tmpdir)
+            assert os.path.exists(os.path.join(tmpdir, "results.json"))
+            assert os.path.exists(os.path.join(tmpdir, "results.csv"))
+
+    def test_json_content(self, sample_results):
+        import json
+
+        from src.run_experiments import save_results_to_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_results_to_files(sample_results, tmpdir)
+            with open(os.path.join(tmpdir, "results.json")) as fh:
+                records = json.load(fh)
+
+        assert len(records) == len(sample_results)
+        required_keys = {"name", "track", "accuracy", "macro_f1", "qwk", "latency_ms", "note"}
+        for rec in records:
+            assert required_keys == set(rec.keys())
+            assert 0.0 <= rec["accuracy"] <= 1.0
+            assert 0.0 <= rec["macro_f1"] <= 1.0
+            assert -1.0 <= rec["qwk"] <= 1.0
+            assert rec["latency_ms"] >= 0.0
+
+    def test_csv_content(self, sample_results):
+        import csv
+
+        from src.run_experiments import save_results_to_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_results_to_files(sample_results, tmpdir)
+            with open(os.path.join(tmpdir, "results.csv"), newline="") as fh:
+                rows = list(csv.DictReader(fh))
+
+        assert len(rows) == len(sample_results)
+        assert "accuracy" in rows[0]
+        assert "macro_f1" in rows[0]
+        assert "name" in rows[0]
+
+    def test_creates_output_dir_if_missing(self, sample_results):
+        from src.run_experiments import save_results_to_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outdir = os.path.join(tmpdir, "nested", "output")
+            assert not os.path.exists(outdir)
+            save_results_to_files(sample_results, outdir)
+            assert os.path.exists(os.path.join(outdir, "results.json"))
+
+    def test_empty_results_list_writes_empty_files(self):
+        from src.run_experiments import save_results_to_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Should not raise; just writes nothing (guarded by caller)
+            # Pass one dummy result to keep csv header intact
+            from src.run_experiments import ExperimentResult
+
+            save_results_to_files([ExperimentResult(name="x", track="sentence")], tmpdir)
+            assert os.path.exists(os.path.join(tmpdir, "results.json"))

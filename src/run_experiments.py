@@ -494,7 +494,64 @@ def parse_args():
             "When set, skips HuggingFace dataset download."
         ),
     )
+    parser.add_argument(
+        "--save_results",
+        default=None,
+        metavar="DIR",
+        help=(
+            "Directory to save experiment results as structured files. "
+            "Writes results.json (one dict per experiment) and results.csv. "
+            "Directory is created if it does not exist."
+        ),
+    )
     return parser.parse_args()
+
+
+def save_results_to_files(results: List[ExperimentResult], output_dir: str) -> None:
+    """
+    Persist experiment results as JSON and CSV files.
+
+    Writes two files inside *output_dir* (created if absent):
+
+    * ``results.json`` – list of experiment records, one dict per row.
+    * ``results.csv``  – same data in CSV format for easy spreadsheet import.
+
+    Args:
+        results:    List of :class:`ExperimentResult` instances.
+        output_dir: Destination directory (created automatically if needed).
+    """
+    import csv
+    import json
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    records = [
+        {
+            "name": r.name,
+            "track": r.track,
+            "accuracy": round(r.accuracy, 6),
+            "macro_f1": round(r.macro_f1, 6),
+            "qwk": round(r.qwk, 6),
+            "latency_ms": round(r.latency * 1000, 4),
+            "note": r.note,
+        }
+        for r in results
+    ]
+
+    if not records:
+        return
+
+    json_path = os.path.join(output_dir, "results.json")
+    with open(json_path, "w", encoding="utf-8") as fh:
+        json.dump(records, fh, indent=2, ensure_ascii=False)
+    print(f"Results saved → {json_path}")
+
+    csv_path = os.path.join(output_dir, "results.csv")
+    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(records[0].keys()))
+        writer.writeheader()
+        writer.writerows(records)
+    print(f"Results saved → {csv_path}")
 
 
 def main():
@@ -598,6 +655,9 @@ def main():
         results.append(r)
 
     print_comparison_table(results)
+
+    if args.save_results and results:
+        save_results_to_files(results, args.save_results)
 
 
 if __name__ == "__main__":
