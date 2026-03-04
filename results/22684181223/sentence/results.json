@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Exp 0 – Majority",
+    "track": "sentence",
+    "accuracy": 0.332667,
+    "macro_f1": 0.083208,
+    "qwk": 0.0,
+    "latency_ms": 0.0,
+    "note": "majority=B2"
+  },
+  {
+    "name": "Exp 1 – TF-IDF+LR",
+    "track": "sentence",
+    "accuracy": 0.528472,
+    "macro_f1": 0.426547,
+    "qwk": 0.663311,
+    "latency_ms": 0.179,
+    "note": ""
+  },
+  {
+    "name": "Exp 5 – Hybrid (mean_prob)",
+    "track": "sentence",
+    "accuracy": 0.528472,
+    "macro_f1": 0.426655,
+    "qwk": 0.663005,
+    "latency_ms": 2.149,
+    "note": ""
+  }
+]
