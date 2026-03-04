@@ -1,0 +1,13 @@
+
+--- Exp 6: Domain transfer ---
+Loading train corpus: UniversalCEFR/cefr_sp_en
+Generating train split:   0%|          | 0/10004 [00:00<?, ? examples/s]Generating train split: 100%|██████████| 10004/10004 [00:00<00:00, 173138.70 examples/s]
+Loading eval corpus: UniversalCEFR/cefr_sp_en
+
+--------------------------------------------------------------------------------------------
+Experiment                                    Track         Acc     F1    QWK   Lat(ms) Note
+--------------------------------------------------------------------------------------------
+Exp 6 – Domain Transfer (TF-IDF+LR)           sentence   0.8870 0.7603 0.9169     0.12ms  train=UniversalCEFR/cefr_sp_en → eval=UniversalCEFR/cefr_sp_en
+--------------------------------------------------------------------------------------------
+Results saved → results/results.json
+Results saved → results/results.csv

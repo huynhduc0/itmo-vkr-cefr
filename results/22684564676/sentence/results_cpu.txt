@@ -1,0 +1,19 @@
+Loading splits from JSONL: data//sentence/
+Train: 8002, Val: 1000, Test: 1001
+
+--- Exp 0: Majority baseline ---
+  Majority class: majority=B2, Accuracy: 0.3327
+
+--- Exp 1: TF-IDF + LR ---
+
+--- Exp 5: Hybrid essay (sentence agg) ---
+
+--------------------------------------------------------------------------------------------
+Experiment                                    Track         Acc     F1    QWK   Lat(ms) Note
+--------------------------------------------------------------------------------------------
+Exp 0 – Majority                              sentence   0.3327 0.0832 0.0000     0.00ms  majority=B2
+Exp 1 – TF-IDF+LR                             sentence   0.5285 0.4265 0.6633     0.18ms  
+Exp 5 – Hybrid (mean_prob)                    sentence   0.5285 0.4267 0.6630     2.15ms  
+--------------------------------------------------------------------------------------------
+Results saved → results/results.json
+Results saved → results/results.csv
