@@ -1,0 +1,290 @@
+name: Full Pipeline
+
+# Manually triggered so the team can choose which experiments to run.
+# GPU experiments (Exp 2-4) are annotated; swap in a GPU runner when available.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Classification track"
+        required: true
+        default: "sentence"
+        type: choice
+        options:
+          - sentence
+          - essay
+      exps:
+        description: >
+          Space-separated experiment IDs to run.
+          CPU-safe: 0 1 5 6  |  Needs GPU: 2 3  |  Needs GPU + HF_TOKEN: 4
+        required: true
+        default: "0 1 5"
+      dataset:
+        description: "HuggingFace dataset for data preparation"
+        required: false
+        default: "UniversalCEFR/cefr_sp_en"
+      epochs:
+        description: "Training epochs (Exp 2-4 only)"
+        required: false
+        default: "3"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1 – Install dependencies & run unit tests
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  lint-and-test:
+    name: Unit tests (CPU)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run unit tests + smoke tests
+        run: python -m pytest tests/ -v --tb=short
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2 – Data preparation
+# Downloads the UniversalCEFR dataset, tokenises with roberta-base,
+# applies length-based track filtering, and saves JSONL splits.
+# ─────────────────────────────────────────────────────────────────────────────
+  prepare-data:
+    name: Prepare data
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install full dependencies (CPU torch)
+        # Install CPU-only PyTorch first to avoid downloading the ~2 GB CUDA build.
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Prepare sentence and essay splits
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -m src.prepare_data \
+            --dataset "${{ inputs.dataset }}" \
+            --output  data/
+
+      - name: Upload prepared splits
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepared-data-${{ inputs.task }}
+          path: data/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6)
+# ─────────────────────────────────────────────────────────────────────────────
+  run-cpu-experiments:
+    name: Run CPU experiments
+    runs-on: ubuntu-latest
+    needs: prepare-data
+    permissions:
+      contents: read
+    # Only runs when at least one CPU-safe experiment is requested.
+    if: |
+      contains(inputs.exps, '0') ||
+      contains(inputs.exps, '1') ||
+      contains(inputs.exps, '5') ||
+      contains(inputs.exps, '6')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install scikit-learn dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Download prepared splits
+        uses: actions/download-artifact@v4
+        with:
+          name: prepared-data-${{ inputs.task }}
+          path: data/
+
+      - name: Run CPU experiments (Exp 0, 1, 5 from JSONL)
+        # Exp 6 (domain transfer) loads directly from HuggingFace so it's
+        # handled separately. Here we run Exp 0/1/5 from pre-prepared JSONL.
+        run: |
+          # Filter requested experiments to CPU-safe ones (0, 1, 5)
+          CPU_EXPS=""
+          for exp in ${{ inputs.exps }}; do
+            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" ]]; then
+              CPU_EXPS="$CPU_EXPS $exp"
+            fi
+          done
+          if [[ -n "$CPU_EXPS" ]]; then
+            python -m src.run_experiments \
+              --task    "${{ inputs.task }}" \
+              --exps    $CPU_EXPS \
+              --data_dir data/ \
+              2>&1 | tee results_cpu.txt
+          else
+            echo "No CPU-safe experiments (0,1,5) requested – skipping."
+          fi
+
+      - name: Run Exp 6 (domain transfer, if requested)
+        if: contains(inputs.exps, '6')
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          python -m src.run_experiments \
+            --task    "${{ inputs.task }}" \
+            --exps    6 \
+            --dataset "${{ inputs.dataset }}" \
+            2>&1 | tee results_exp6.txt
+
+      - name: Upload CPU experiment results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-cpu-${{ inputs.task }}
+          path: "results_*.txt"
+          if-no-files-found: ignore
+          retention-days: 30
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 4 – Transformer experiments (Exp 2, 3) – requires GPU runner
+# ─────────────────────────────────────────────────────────────────────────────
+  run-transformer-experiments:
+    name: Run transformer experiments (GPU)
+    # Switch to a GPU runner (e.g. ubuntu-latest-gpu, self-hosted) when available.
+    runs-on: ubuntu-latest
+    needs: prepare-data
+    permissions:
+      contents: read
+    if: contains(inputs.exps, '2') || contains(inputs.exps, '3')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install full dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download prepared splits
+        uses: actions/download-artifact@v4
+        with:
+          name: prepared-data-${{ inputs.task }}
+          path: data/
+
+      - name: Run transformer experiments
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          TRANS_EXPS=""
+          for exp in ${{ inputs.exps }}; do
+            if [[ "$exp" == "2" || "$exp" == "3" ]]; then
+              TRANS_EXPS="$TRANS_EXPS $exp"
+            fi
+          done
+          python -m src.run_experiments \
+            --task      "${{ inputs.task }}" \
+            --exps      $TRANS_EXPS \
+            --data_dir  data/ \
+            --epochs    "${{ inputs.epochs }}" \
+            2>&1 | tee results_transformer.txt
+
+      - name: Upload transformer results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-transformer-${{ inputs.task }}
+          path: results_transformer.txt
+          retention-days: 30
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 5 – LLM + LoRA experiment (Exp 4) – requires GPU + HF_TOKEN
+# ─────────────────────────────────────────────────────────────────────────────
+  run-llm-experiment:
+    name: Run LLM+LoRA experiment (GPU + HF_TOKEN)
+    # Switch to a GPU runner (e.g. ubuntu-latest-gpu, self-hosted) when available.
+    runs-on: ubuntu-latest
+    needs: prepare-data
+    permissions:
+      contents: read
+    if: contains(inputs.exps, '4')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install full dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download prepared splits
+        uses: actions/download-artifact@v4
+        with:
+          name: prepared-data-${{ inputs.task }}
+          path: data/
+
+      - name: Login to HuggingFace Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -c "
+          from huggingface_hub import login
+          import os
+          token = os.environ.get('HF_TOKEN')
+          if not token:
+              raise EnvironmentError(
+                  'HF_TOKEN secret is required for Exp 4 (LLaMA is a gated model). '
+                  'Add it in Settings → Secrets → Actions.'
+              )
+          login(token=token)
+          print('HuggingFace login successful.')
+          "
+
+      - name: Run LLM+LoRA experiment
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -m src.run_experiments \
+            --task     "${{ inputs.task }}" \
+            --exps     4 \
+            --data_dir data/ \
+            --epochs   "${{ inputs.epochs }}" \
+            2>&1 | tee results_llm.txt
+
+      - name: Upload LLM results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-llm-${{ inputs.task }}
+          path: results_llm.txt
+          retention-days: 30

@@ -5,16 +5,23 @@ Runs the selected experiments and prints a comparison table of:
   Accuracy | Macro-F1 | QWK | Inference latency (s/sample)
 
 Usage:
-    python -m src.run_experiments --task sentence --exps 0 1 2
-    python -m src.run_experiments --task essay   --exps 0 1 2 5
+    # Load data from HuggingFace and run CPU baselines:
+    python -m src.run_experiments --task sentence --exps 0 1
+
+    # Load from pre-prepared JSONL (output of prepare_data.py) – no HF download:
+    python -m src.run_experiments --task sentence --exps 0 1 5 \
+        --data_dir data/
+
+    # Cross-corpus domain transfer (Exp 6):
     python -m src.run_experiments --task sentence --exps 6 \
         --train_dataset UniversalCEFR/cefr_sp_en \
-        --eval_dataset  UniversalCEFR/cefr_sp_de   # cross-corpus
+        --eval_dataset  UniversalCEFR/cefr_sp_de
 """
 
 import argparse
+import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -22,12 +29,56 @@ import numpy as np
 from src.config import DATASET_CONFIG, RANDOM_SEED, TRANSFORMER_CONFIG
 from src.data_utils import (
     load_and_split_dataset,
+    load_jsonl,
     load_multiple_datasets,
     remove_duplicates,
     set_seed,
     stratified_split,
 )
 from src.evaluate import compute_metrics, print_evaluation_report
+
+
+# ---------------------------------------------------------------------------
+# JSONL data loader (used when --data_dir is provided)
+# ---------------------------------------------------------------------------
+
+def _load_splits_from_jsonl(
+    data_dir: str,
+    task: str,
+) -> Tuple[Tuple, Tuple, Tuple]:
+    """
+    Load train / dev / test splits from pre-prepared JSONL files.
+
+    Expected layout (produced by ``python -m src.prepare_data``)::
+
+        {data_dir}/{task}/train.jsonl
+        {data_dir}/{task}/dev.jsonl
+        {data_dir}/{task}/test.jsonl
+
+    Each line: ``{"text": "...", "label": "B2", "n_tokens": 42}``
+
+    Args:
+        data_dir: root output directory of prepare_data.py
+        task: ``"sentence"`` or ``"essay"``
+
+    Returns:
+        ``(train, val, test)`` where each element is ``(texts, labels)``.
+    """
+    from src.config import LABEL2ID
+
+    def _load(split_name: str):
+        path = os.path.join(data_dir, task, f"{split_name}.jsonl")
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Split file not found: {path}\n"
+                f"Run `python -m src.prepare_data --output {data_dir}` first."
+            )
+        records = load_jsonl(path)
+        texts = [r["text"] for r in records]
+        labels = [LABEL2ID[r["label"]] for r in records]
+        return texts, labels
+
+    return _load("train"), _load("dev"), _load("test")
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +485,15 @@ def parse_args():
         type=int,
         default=RANDOM_SEED,
     )
+    parser.add_argument(
+        "--data_dir",
+        default=None,
+        help=(
+            "Directory containing pre-prepared JSONL splits from prepare_data.py. "
+            "Expected layout: {data_dir}/{task}/train.jsonl, dev.jsonl, test.jsonl. "
+            "When set, skips HuggingFace dataset download."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -443,16 +503,22 @@ def main():
 
     # Load data (shared across Exp 0–5)
     if any(e in args.exps for e in [0, 1, 2, 3, 4, 5]):
-        print(f"Loading dataset: {args.dataset}")
-        (train_texts, train_labels), (val_texts, val_labels), (test_texts, test_labels) = (
-            load_and_split_dataset(
-                dataset_name=args.dataset,
-                text_column=args.text_column,
-                label_column=args.label_column,
-                seed=args.seed,
-                deduplicate=True,
+        if args.data_dir:
+            print(f"Loading splits from JSONL: {args.data_dir}/{args.task}/")
+            (train_texts, train_labels), (val_texts, val_labels), (test_texts, test_labels) = (
+                _load_splits_from_jsonl(args.data_dir, args.task)
             )
-        )
+        else:
+            print(f"Loading dataset from HuggingFace: {args.dataset}")
+            (train_texts, train_labels), (val_texts, val_labels), (test_texts, test_labels) = (
+                load_and_split_dataset(
+                    dataset_name=args.dataset,
+                    text_column=args.text_column,
+                    label_column=args.label_column,
+                    seed=args.seed,
+                    deduplicate=True,
+                )
+            )
         print(
             f"Train: {len(train_texts)}, Val: {len(val_texts)}, Test: {len(test_texts)}"
         )
