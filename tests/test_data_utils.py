@@ -2,16 +2,39 @@
 Unit tests for data utilities.
 """
 
+import json
+import os
+import tempfile
+
 import pytest
 
 from src.config import CEFR_LEVELS, LABEL2ID
 from src.data_utils import (
+    build_token_counts,
+    count_tokens,
+    filter_by_length,
+    filter_min_class_size,
     get_label_distribution,
+    load_jsonl,
     normalize_label,
+    normalize_text,
     remove_duplicates,
+    save_jsonl,
     set_seed,
     stratified_split,
 )
+
+
+# ---------------------------------------------------------------------------
+# Mock tokenizer for tests that count tokens without requiring `transformers`
+# ---------------------------------------------------------------------------
+
+class _MockTokenizer:
+    """Splits on whitespace and adds 2 for [CLS]/[SEP] — no model download."""
+
+    def __call__(self, text, **kwargs):
+        tokens = text.split()
+        return {"input_ids": list(range(len(tokens) + 2))}
 
 
 class TestNormalizeLabel:
@@ -138,3 +161,187 @@ class TestRemoveDuplicates:
         out_t, out_l = remove_duplicates([], [])
         assert out_t == []
         assert out_l == []
+
+
+# ---------------------------------------------------------------------------
+# normalize_text
+# ---------------------------------------------------------------------------
+
+class TestNormalizeText:
+    def test_strips_leading_trailing_whitespace(self):
+        assert normalize_text("  hello world  ") == "hello world"
+
+    def test_collapses_internal_whitespace(self):
+        assert normalize_text("hello   world") == "hello world"
+
+    def test_collapses_tabs_and_newlines(self):
+        assert normalize_text("hello\t\nworld") == "hello world"
+
+    def test_preserves_casing(self):
+        assert normalize_text("Hello World") == "Hello World"
+
+    def test_empty_string(self):
+        assert normalize_text("") == ""
+
+    def test_only_whitespace(self):
+        assert normalize_text("   ") == ""
+
+    def test_no_change_needed(self):
+        text = "This is a clean sentence."
+        assert normalize_text(text) == text
+
+
+# ---------------------------------------------------------------------------
+# count_tokens / build_token_counts
+# ---------------------------------------------------------------------------
+
+class TestCountTokens:
+    def test_basic(self):
+        tok = _MockTokenizer()
+        # "hello world" -> 2 word tokens + 2 special = 4
+        assert count_tokens("hello world", tok) == 4
+
+    def test_single_word(self):
+        tok = _MockTokenizer()
+        assert count_tokens("hello", tok) == 3  # 1 word + 2 special
+
+    def test_empty_string(self):
+        tok = _MockTokenizer()
+        # 0 words + 2 special tokens
+        assert count_tokens("", tok) == 2
+
+    def test_build_token_counts_length(self):
+        tok = _MockTokenizer()
+        texts = ["hello world", "this is a test", "ok"]
+        counts = build_token_counts(texts, tok)
+        assert len(counts) == len(texts)
+
+    def test_build_token_counts_values(self):
+        tok = _MockTokenizer()
+        texts = ["one", "one two", "one two three"]
+        counts = build_token_counts(texts, tok)
+        assert counts == [3, 4, 5]
+
+
+# ---------------------------------------------------------------------------
+# filter_by_length
+# ---------------------------------------------------------------------------
+
+class TestFilterByLength:
+    @pytest.fixture
+    def sample(self):
+        texts = ["a", "b", "c", "d", "e"]
+        labels = [0, 1, 2, 3, 4]
+        n_tokens = [5, 10, 20, 64, 128]
+        return texts, labels, n_tokens
+
+    def test_min_only(self, sample):
+        texts, labels, n_tokens = sample
+        ft, fl, fn = filter_by_length(texts, labels, n_tokens, min_tokens=10)
+        assert 5 not in fn
+        assert all(n >= 10 for n in fn)
+
+    def test_max_only(self, sample):
+        texts, labels, n_tokens = sample
+        ft, fl, fn = filter_by_length(texts, labels, n_tokens, max_tokens=20)
+        assert all(n <= 20 for n in fn)
+
+    def test_min_and_max(self, sample):
+        texts, labels, n_tokens = sample
+        ft, fl, fn = filter_by_length(texts, labels, n_tokens, min_tokens=10, max_tokens=64)
+        assert all(10 <= n <= 64 for n in fn)
+        assert len(ft) == 3  # n=10, 20, 64
+
+    def test_no_bounds(self, sample):
+        texts, labels, n_tokens = sample
+        ft, fl, fn = filter_by_length(texts, labels, n_tokens)
+        assert len(ft) == len(texts)
+
+    def test_empty_result(self, sample):
+        texts, labels, n_tokens = sample
+        ft, fl, fn = filter_by_length(texts, labels, n_tokens, min_tokens=999)
+        assert ft == []
+        assert fl == []
+        assert fn == []
+
+    def test_parallel_lists_consistent(self, sample):
+        texts, labels, n_tokens = sample
+        ft, fl, fn = filter_by_length(texts, labels, n_tokens, min_tokens=10, max_tokens=64)
+        assert len(ft) == len(fl) == len(fn)
+
+
+# ---------------------------------------------------------------------------
+# filter_min_class_size
+# ---------------------------------------------------------------------------
+
+class TestFilterMinClassSize:
+    def test_drops_small_class(self):
+        # class 0 has 1 sample, class 1 has 5 samples; min=2 → drop class 0
+        texts = ["a"] + ["b"] * 5
+        labels = [0] + [1] * 5
+        n_tokens = [10] * 6
+        ft, fl, fn = filter_min_class_size(texts, labels, n_tokens, min_samples=2)
+        assert 0 not in fl
+        assert all(l == 1 for l in fl)
+
+    def test_keeps_all_large_enough(self):
+        texts = ["a"] * 3 + ["b"] * 3
+        labels = [0] * 3 + [1] * 3
+        n_tokens = [10] * 6
+        ft, fl, fn = filter_min_class_size(texts, labels, n_tokens, min_samples=3)
+        assert len(ft) == 6
+
+    def test_empty_result_when_all_too_small(self):
+        texts = ["a", "b"]
+        labels = [0, 1]
+        n_tokens = [10, 10]
+        ft, fl, fn = filter_min_class_size(texts, labels, n_tokens, min_samples=5)
+        assert ft == []
+        assert fl == []
+        assert fn == []
+
+    def test_parallel_lists_consistent(self):
+        texts = ["a"] * 10 + ["b"] * 10
+        labels = [0] * 10 + [1] * 10
+        n_tokens = list(range(20))
+        ft, fl, fn = filter_min_class_size(texts, labels, n_tokens, min_samples=5)
+        assert len(ft) == len(fl) == len(fn)
+
+
+# ---------------------------------------------------------------------------
+# save_jsonl / load_jsonl
+# ---------------------------------------------------------------------------
+
+class TestJsonl:
+    def test_roundtrip(self):
+        records = [
+            {"text": "Hello world.", "label": "B1", "n_tokens": 5},
+            {"text": "Another sentence.", "label": "A2", "n_tokens": 3},
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.jsonl")
+            save_jsonl(records, path)
+            loaded = load_jsonl(path)
+        assert loaded == records
+
+    def test_unicode_preserved(self):
+        records = [{"text": "Héllo wörld", "label": "C1", "n_tokens": 4}]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "unicode.jsonl")
+            save_jsonl(records, path)
+            loaded = load_jsonl(path)
+        assert loaded[0]["text"] == "Héllo wörld"
+
+    def test_creates_parent_dirs(self):
+        records = [{"x": 1}]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "nested", "deep", "out.jsonl")
+            save_jsonl(records, path)
+            assert os.path.exists(path)
+
+    def test_empty_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "empty.jsonl")
+            save_jsonl([], path)
+            loaded = load_jsonl(path)
+        assert loaded == []
