@@ -288,7 +288,12 @@ def predict_llm(
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id,
             )
-        output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        
+        # Slice off the prompt tokens so we only decode the newly generated tokens
+        input_length = inputs["input_ids"].shape[1]
+        generated_ids = output_ids[0][input_length:]
+        
+        output_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
         label = extract_predicted_label(output_text)
         predictions.append(LABEL2ID.get(label, -1))
     return np.array(predictions)
