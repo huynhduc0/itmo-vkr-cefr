@@ -9,6 +9,11 @@ from src.majority_baseline import MajorityClassifier
 
 
 class TestMajorityClassifier:
+    def test_fit_returns_self(self):
+        clf = MajorityClassifier()
+        returned = clf.fit([0, 1, 1])
+        assert returned is clf
+
     def test_fit_and_predict(self):
         clf = MajorityClassifier()
         labels = [0, 0, 0, 1, 2, 2]
@@ -32,6 +37,14 @@ class TestMajorityClassifier:
         clf.fit([3])
         preds = clf.predict(5)
         assert isinstance(preds, np.ndarray)
+        assert preds.dtype in (np.int32, np.int64, int)
+
+    def test_predict_zero_length(self):
+        clf = MajorityClassifier()
+        clf.fit([2, 2, 1])
+        preds = clf.predict(0)
+        assert isinstance(preds, np.ndarray)
+        assert preds.shape == (0,)
 
     def test_fit_empty_raises(self):
         clf = MajorityClassifier()
@@ -61,3 +74,10 @@ class TestMajorityClassifier:
         assert clf.majority_level == "C2"
         preds = clf.predict(3)
         assert np.all(preds == 5)
+
+    def test_majority_level_matches_predicted_id(self):
+        clf = MajorityClassifier()
+        clf.fit([4, 4, 3, 2, 4])
+        pred = clf.predict(1)[0]
+        assert clf.majority_level == "C1"
+        assert pred == 4

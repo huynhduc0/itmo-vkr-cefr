@@ -59,6 +59,14 @@ class TestAggregateMeanProb:
         pred = aggregate_mean_prob(probs)
         assert pred == 3
 
+    def test_tie_breaks_to_lowest_label(self):
+        probs = np.array([
+            [0.5, 0.5, 0.0, 0.0, 0.0, 0.0],
+            [0.5, 0.5, 0.0, 0.0, 0.0, 0.0],
+        ])
+        pred = aggregate_mean_prob(probs)
+        assert pred == 0
+
 
 class TestAggregateMajorityVote:
     def test_clear_majority(self):
@@ -81,6 +89,14 @@ class TestAggregateWeightedVote:
         label_ids = [2, 2, 3]
         weights = [1.0, 1.0, 1.0]
         assert aggregate_weighted_vote(label_ids, weights) == 2
+
+    def test_empty_inputs_return_zero(self):
+        assert aggregate_weighted_vote([], []) == 0
+
+    def test_weighted_vote_tie_breaks_to_lowest_label(self):
+        label_ids = [1, 2]
+        weights = [2.0, 2.0]
+        assert aggregate_weighted_vote(label_ids, weights) == 1
 
 
 class TestHybridEssayClassifier:
@@ -149,3 +165,12 @@ class TestHybridEssayClassifier:
         clf = HybridEssayClassifier(predict_fn=predict_fn, aggregation="majority_vote")
         result = clf.predict_one("")
         assert result == 0
+
+    def test_weighted_vote_uses_sentence_length_weights(self):
+        def predict_fn(_texts):
+            return np.array([1, 2])
+
+        clf = HybridEssayClassifier(predict_fn=predict_fn, aggregation="weighted_vote")
+        # second sentence is much longer, so label 2 should win
+        result = clf.predict_one("Short. This sentence is significantly longer.")
+        assert result == 2

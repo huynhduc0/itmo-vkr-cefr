@@ -9,6 +9,19 @@ from src.ordinal_classifier import coral_predict
 
 
 class TestCoralPredict:
+    def test_accepts_torch_tensor_input(self):
+        torch = pytest.importorskip("torch")
+        logits = torch.tensor([[10.0, -10.0, 10.0, -10.0, 10.0]])
+        preds = coral_predict(logits)
+        assert isinstance(preds, np.ndarray)
+        assert preds[0] == 3
+
+    def test_threshold_at_zero_counts_as_exceeded(self):
+        # sigmoid(0) == 0.5 and function uses >= 0.5
+        logits = np.array([[0.0, 0.0, 0.0, 0.0, 0.0]])
+        preds = coral_predict(logits)
+        assert preds[0] == 5
+
     def test_all_thresholds_exceeded(self):
         # large positive logits -> all probs >= 0.5 -> label = K-1 = 5
         logits = np.array([[10.0, 10.0, 10.0, 10.0, 10.0]])
@@ -36,6 +49,15 @@ class TestCoralPredict:
         logits = np.array([[1.0, -1.0, 1.0, -1.0, 1.0]])
         preds = coral_predict(logits)
         assert preds.dtype in (np.int32, np.int64, int)
+
+    def test_batch_mixed_predictions(self):
+        logits = np.array([
+            [10.0, 10.0, 10.0, 10.0, 10.0],     # -> 5
+            [-10.0, -10.0, -10.0, -10.0, -10.0],  # -> 0
+            [10.0, -10.0, 10.0, -10.0, 10.0],   # -> 3
+        ])
+        preds = coral_predict(logits)
+        assert preds.tolist() == [5, 0, 3]
 
     def test_valid_label_range(self):
         rng = np.random.default_rng(0)
