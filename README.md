@@ -16,7 +16,7 @@ src/prepare_data.py          ← Tải & chuẩn hoá dữ liệu, tạo splits 
         ▼  data/{sentence,essay}/{train,dev,test}.jsonl
         │
         ▼
-src/run_experiments.py       ← Chạy các thí nghiệm (Exp 0–6)
+src/run_experiments.py       ← Chạy các thí nghiệm (Exp 0–10)
         │
         ▼  results/{run_id}/{task}/results.json  &  results.csv
         │
@@ -37,6 +37,10 @@ results/ (được commit vào repo)   ← Kết quả được lưu vĩnh viễ
 | 4 | LLaMA + LoRA | GPU + `HF_TOKEN` |
 | 5 | Hybrid essay classifier | CPU |
 | 6 | Domain transfer (cross-corpus) | CPU / GPU |
+| 7 | TF-IDF + LinearSVC | CPU |
+| 8 | TF-IDF + Complement Naive Bayes | CPU |
+| 9 | Word-only TF-IDF + Logistic Regression | CPU |
+| 10 | Ensemble (LR + ComplementNB soft voting) | CPU |
 
 ---
 
@@ -78,7 +82,7 @@ data/
 # CPU baselines (không cần GPU, không cần HF_TOKEN):
 python -m src.run_experiments \
     --task      sentence \
-    --exps      0 1 5 \
+    --exps      0 1 5 7 \
     --data_dir  data/ \
     --save_results results/
 
@@ -108,7 +112,7 @@ Workflow `workflow_dispatch` để chạy toàn bộ pipeline với dữ liệu 
 | Tham số | Mặc định | Mô tả |
 |---------|----------|-------|
 | `task` | `sentence` | Track phân loại (`sentence` hoặc `essay`) |
-| `exps` | `0 1 5` | IDs thí nghiệm cách nhau bởi dấu cách |
+| `exps` | `0 1 5 7` | IDs thí nghiệm cách nhau bởi dấu cách |
 | `dataset` | `UniversalCEFR/cefr_sp_en` | Dataset trên HuggingFace |
 | `epochs` | `3` | Số epochs cho Exp 2–4 |
 
@@ -117,7 +121,7 @@ Workflow `workflow_dispatch` để chạy toàn bộ pipeline với dữ liệu 
 ```
 Stage 1 – lint-and-test         Unit tests (giống CI)
 Stage 2 – prepare-data          Tải dataset từ HuggingFace, sinh JSONL splits
-Stage 3 – run-cpu-experiments   Chạy Exp 0, 1, 5, 6 (CPU-only)
+Stage 3 – run-cpu-experiments   Chạy Exp 0, 1, 5, 6, 7, 8, 9, 10 (CPU-only)
 Stage 4 – run-transformer-exp   Chạy Exp 2, 3 (yêu cầu GPU)
 Stage 5 – run-llm-experiment    Chạy Exp 4 LLaMA+LoRA (GPU + HF_TOKEN)
 Stage 6 – commit-results        ★ Commit kết quả vào repo
@@ -166,7 +170,7 @@ itmo-vkr-cefr/
 │   ├── config.py               ← Cấu hình toàn cục (CEFR labels, splits, ...)
 │   ├── data_utils.py           ← Tiện ích xử lý dữ liệu
 │   ├── prepare_data.py         ← Script chuẩn bị dữ liệu
-│   ├── run_experiments.py      ← Unified experiment runner (Exp 0–6)
+│   ├── run_experiments.py      ← Unified experiment runner (Exp 0–10)
 │   ├── evaluate.py             ← Tính metrics (accuracy, F1, QWK)
 │   ├── majority_baseline.py    ← Exp 0: Majority baseline
 │   ├── baseline_tfidf.py       ← Exp 1: TF-IDF baseline

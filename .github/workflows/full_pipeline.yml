@@ -16,9 +16,9 @@ on:
       exps:
         description: >
           Space-separated experiment IDs to run.
-          CPU-safe: 0 1 5 6  |  Needs GPU: 2 3  |  Needs GPU + HF_TOKEN: 4
+          CPU-safe: 0 1 5 6 7 8 9 10  |  Needs GPU: 2 3  |  Needs GPU + HF_TOKEN: 4
         required: true
-        default: "0 1 5"
+        default: "0 1 5 7"
       dataset:
         description: "HuggingFace dataset for data preparation"
         required: false
@@ -97,7 +97,7 @@ jobs:
           retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6)
+# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6, 7, 8, 9, 10)
 # ─────────────────────────────────────────────────────────────────────────────
   run-cpu-experiments:
     name: Run CPU experiments
@@ -110,7 +110,11 @@ jobs:
       contains(inputs.exps, '0') ||
       contains(inputs.exps, '1') ||
       contains(inputs.exps, '5') ||
-      contains(inputs.exps, '6')
+      contains(inputs.exps, '6') ||
+      contains(inputs.exps, '7') ||
+      contains(inputs.exps, '8') ||
+      contains(inputs.exps, '9') ||
+      contains(inputs.exps, '10')
 
     steps:
       - uses: actions/checkout@v4
@@ -130,14 +134,14 @@ jobs:
           name: prepared-data
           path: data/
 
-      - name: Run CPU experiments (Exp 0, 1, 5 from JSONL)
+      - name: Run CPU experiments (Exp 0, 1, 5, 7, 8, 9, 10 from JSONL)
         # Exp 6 (domain transfer) loads directly from HuggingFace so it's
         # handled separately. Here we run Exp 0/1/5 from pre-prepared JSONL.
         run: |
-          # Filter requested experiments to CPU-safe ones (0, 1, 5)
+          # Filter requested experiments to CPU-safe ones from JSONL.
           CPU_EXPS=""
           for exp in ${{ inputs.exps }}; do
-            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" ]]; then
+            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" || "$exp" == "7" || "$exp" == "8" || "$exp" == "9" || "$exp" == "10" ]]; then
               CPU_EXPS="$CPU_EXPS $exp"
             fi
           done
@@ -149,7 +153,7 @@ jobs:
               --save_results results/ \
               2>&1 | tee results_cpu.txt
           else
-            echo "No CPU-safe experiments (0,1,5) requested – skipping."
+            echo "No JSONL CPU experiments (0,1,5,7,8,9,10) requested – skipping."
           fi
 
       - name: Run Exp 6 (domain transfer, if requested)
@@ -382,4 +386,3 @@ jobs:
             git push || (git pull --rebase origin "${GITHUB_REF_NAME}" && git push)
             echo "Results committed and pushed to ${{ github.ref }}."
           fi
-
