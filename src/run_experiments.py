@@ -406,6 +406,129 @@ def run_exp6(
 
 
 # ---------------------------------------------------------------------------
+# Exp 7 – TF-IDF + Linear SVM
+# ---------------------------------------------------------------------------
+
+def run_exp7(
+    train_texts: List[str],
+    train_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+) -> ExperimentResult:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.pipeline import FeatureUnion, Pipeline
+    from sklearn.svm import LinearSVC
+
+    word_tfidf = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
+    char_tfidf = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
+    pipeline = Pipeline([
+        ("features", FeatureUnion([("word", word_tfidf), ("char", char_tfidf)])),
+        ("clf", LinearSVC()),
+    ])
+    pipeline.fit(train_texts, train_labels)
+    preds, latency = _time_predict(pipeline.predict, test_texts)
+    metrics = compute_metrics(test_labels, preds.tolist())
+    return ExperimentResult(name="Exp 7 – TF-IDF+LinearSVC", track=track, latency=latency, **metrics)
+
+
+# ---------------------------------------------------------------------------
+# Exp 8 – TF-IDF + Complement Naive Bayes
+# ---------------------------------------------------------------------------
+
+def run_exp8(
+    train_texts: List[str],
+    train_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+) -> ExperimentResult:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.naive_bayes import ComplementNB
+    from sklearn.pipeline import FeatureUnion, Pipeline
+
+    word_tfidf = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
+    char_tfidf = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
+    pipeline = Pipeline([
+        ("features", FeatureUnion([("word", word_tfidf), ("char", char_tfidf)])),
+        ("clf", ComplementNB(alpha=0.5)),
+    ])
+    pipeline.fit(train_texts, train_labels)
+    preds, latency = _time_predict(pipeline.predict, test_texts)
+    metrics = compute_metrics(test_labels, preds.tolist())
+    return ExperimentResult(name="Exp 8 – TF-IDF+ComplementNB", track=track, latency=latency, **metrics)
+
+
+# ---------------------------------------------------------------------------
+# Exp 9 – TF-IDF (word only) + Logistic Regression
+# ---------------------------------------------------------------------------
+
+def run_exp9(
+    train_texts: List[str],
+    train_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+) -> ExperimentResult:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+
+    pipeline = Pipeline([
+        ("features", TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)),
+        ("clf", LogisticRegression(max_iter=1000, solver="lbfgs")),
+    ])
+    pipeline.fit(train_texts, train_labels)
+    preds, latency = _time_predict(pipeline.predict, test_texts)
+    metrics = compute_metrics(test_labels, preds.tolist())
+    return ExperimentResult(name="Exp 9 – Word TF-IDF+LR", track=track, latency=latency, **metrics)
+
+
+# ---------------------------------------------------------------------------
+# Exp 10 – Soft voting ensemble of Exp 1 and Exp 8
+# ---------------------------------------------------------------------------
+
+def run_exp10(
+    train_texts: List[str],
+    train_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+) -> ExperimentResult:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.naive_bayes import ComplementNB
+    from sklearn.pipeline import FeatureUnion, Pipeline
+
+    word = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
+    char = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
+    union = FeatureUnion([("word", word), ("char", char)])
+
+    lr_pipe = Pipeline([
+        ("features", union),
+        ("clf", LogisticRegression(max_iter=1000, solver="lbfgs")),
+    ])
+    nb_pipe = Pipeline([
+        ("features", union),
+        ("clf", ComplementNB(alpha=0.5)),
+    ])
+
+    lr_pipe.fit(train_texts, train_labels)
+    nb_pipe.fit(train_texts, train_labels)
+
+    start = time.perf_counter()
+    p_lr = lr_pipe.predict_proba(test_texts)
+    p_nb = nb_pipe.predict_proba(test_texts)
+    mean_prob = (p_lr + p_nb) / 2.0
+    preds = np.argmax(mean_prob, axis=1)
+    elapsed = time.perf_counter() - start
+    latency = elapsed / max(len(test_texts), 1)
+
+    metrics = compute_metrics(test_labels, preds.tolist())
+    return ExperimentResult(name="Exp 10 – Ensemble (LR+CNB)", track=track, latency=latency, **metrics)
+
+
+# ---------------------------------------------------------------------------
 # Comparison table
 # ---------------------------------------------------------------------------
 
@@ -445,7 +568,7 @@ def parse_args():
         nargs="+",
         type=int,
         default=[0, 1],
-        help="Experiment ids to run (0–6)",
+        help="Experiment ids to run (0–10)",
     )
     parser.add_argument(
         "--dataset",
@@ -559,7 +682,7 @@ def main():
     set_seed(args.seed)
 
     # Load data (shared across Exp 0–5)
-    if any(e in args.exps for e in [0, 1, 2, 3, 4, 5]):
+    if any(e in args.exps for e in [0, 1, 2, 3, 4, 5, 7, 8, 9, 10]):
         if args.data_dir:
             print(f"Loading splits from JSONL: {args.data_dir}/{args.task}/")
             (train_texts, train_labels), (val_texts, val_labels), (test_texts, test_labels) = (
@@ -652,6 +775,26 @@ def main():
             track=args.task,
             seed=args.seed,
         )
+        results.append(r)
+
+    if 7 in args.exps:
+        print("\n--- Exp 7: TF-IDF + LinearSVC ---")
+        r = run_exp7(train_texts, train_labels, test_texts, test_labels, track=args.task)
+        results.append(r)
+
+    if 8 in args.exps:
+        print("\n--- Exp 8: TF-IDF + ComplementNB ---")
+        r = run_exp8(train_texts, train_labels, test_texts, test_labels, track=args.task)
+        results.append(r)
+
+    if 9 in args.exps:
+        print("\n--- Exp 9: Word TF-IDF + LR ---")
+        r = run_exp9(train_texts, train_labels, test_texts, test_labels, track=args.task)
+        results.append(r)
+
+    if 10 in args.exps:
+        print("\n--- Exp 10: Ensemble (LR + ComplementNB) ---")
+        r = run_exp10(train_texts, train_labels, test_texts, test_labels, track=args.task)
         results.append(r)
 
     print_comparison_table(results)

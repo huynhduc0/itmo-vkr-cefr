@@ -90,6 +90,25 @@ The same label space is used in all experiments.
 - **Method**: Train on one UniversalCEFR English subcorpus and evaluate on another one.
 - **Purpose**: evaluate cross-corpus robustness.
 
+### Exp 7 — TF-IDF + Linear SVM
+- **Features**: word n-grams (1–2), character n-grams (3–5).
+- **Classifier**: LinearSVC.
+- **Purpose**: margin-based classical baseline for sparse text features.
+
+### Exp 8 — TF-IDF + Complement Naive Bayes
+- **Features**: word n-grams (1–2), character n-grams (3–5).
+- **Classifier**: ComplementNB.
+- **Purpose**: fast probabilistic baseline, often strong on imbalanced text classes.
+
+### Exp 9 — Word-only TF-IDF + Logistic Regression
+- **Features**: word n-grams only (1–2), no character features.
+- **Classifier**: Logistic Regression.
+- **Purpose**: ablation against Exp 1 to measure impact of char n-grams.
+
+### Exp 10 — Ensemble (LR + ComplementNB)
+- **Method**: train Exp 1-style LR and Exp 8-style ComplementNB, then average probabilities.
+- **Purpose**: lightweight CPU ensemble to improve robustness.
+
 ## 6. Hyperparameter search
 
 For Exp 2–Exp 4:

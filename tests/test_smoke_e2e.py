@@ -129,6 +129,44 @@ class TestEndToEndExp5:
 
 
 # ---------------------------------------------------------------------------
+# Exp 7-10 – Additional CPU baselines
+# ---------------------------------------------------------------------------
+
+class TestEndToEndExtraCpuExperiments:
+    def test_exp7_linear_svc(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp7
+
+        r = run_exp7(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 7")
+        assert 0.0 <= r.accuracy <= 1.0
+
+    def test_exp8_complement_nb(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp8
+
+        r = run_exp8(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 8")
+        assert 0.0 <= r.accuracy <= 1.0
+
+    def test_exp9_word_only_lr(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp9
+
+        r = run_exp9(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 9")
+        assert 0.0 <= r.accuracy <= 1.0
+
+    def test_exp10_ensemble(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp10
+
+        r = run_exp10(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 10")
+        assert 0.0 <= r.accuracy <= 1.0
+
+
+# ---------------------------------------------------------------------------
 # Comparison table
 # ---------------------------------------------------------------------------
 
