@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Exp 0 – Majority",
+    "track": "sentence",
+    "accuracy": 0.332667,
+    "macro_f1": 0.083208,
+    "qwk": 0.0,
+    "latency_ms": 0.0,
+    "note": "majority=B2"
+  },
+  {
+    "name": "Exp 1 – TF-IDF+LR",
+    "track": "sentence",
+    "accuracy": 0.528472,
+    "macro_f1": 0.426547,
+    "qwk": 0.663311,
+    "latency_ms": 0.1623,
+    "note": ""
+  },
+  {
+    "name": "Exp 5 – Hybrid (mean_prob)",
+    "track": "sentence",
+    "accuracy": 0.528472,
+    "macro_f1": 0.426655,
+    "qwk": 0.663005,
+    "latency_ms": 2.1623,
+    "note": ""
+  },
+  {
+    "name": "Exp 7 – TF-IDF+LinearSVC",
+    "track": "sentence",
+    "accuracy": 0.519481,
+    "macro_f1": 0.454463,
+    "qwk": 0.699635,
+    "latency_ms": 0.1024,
+    "note": ""
+  },
+  {
+    "name": "Exp 8 – TF-IDF+ComplementNB",
+    "track": "sentence",
+    "accuracy": 0.52048,
+    "macro_f1": 0.42225,
+    "qwk": 0.671698,
+    "latency_ms": 0.1029,
+    "note": ""
+  },
+  {
+    "name": "Exp 9 – Word TF-IDF+LR",
+    "track": "sentence",
+    "accuracy": 0.494505,
+    "macro_f1": 0.320484,
+    "qwk": 0.575724,
+    "latency_ms": 0.0586,
+    "note": ""
+  },
+  {
+    "name": "Exp 10 – Ensemble (LR+CNB)",
+    "track": "sentence",
+    "accuracy": 0.529471,
+    "macro_f1": 0.421505,
+    "qwk": 0.679978,
+    "latency_ms": 0.1987,
+    "note": ""
+  }
+]
