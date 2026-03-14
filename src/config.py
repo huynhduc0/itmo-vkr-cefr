@@ -78,6 +78,31 @@ DATASET_CONFIG = {
     "label_column": "cefr_level",
 }
 
+# Language-specific presets for data preparation.
+# Each entry maps a language code to its default dataset, tokenizer, and
+# column names so that --language en / --language ru sets sensible defaults
+# without requiring the user to repeat all options every time.
+LANGUAGE_PRESETS = {
+    "en": {
+        "dataset_name": "UniversalCEFR/cefr_sp_en",
+        "tokenizer": "roberta-base",
+        "text_column": "text",
+        "label_column": "cefr_level",
+    },
+    "ru": {
+        # Russian CEFR dataset placeholder – the default value (cefr_sp_ru)
+        # does not exist on the HuggingFace Hub yet.  Users MUST override
+        # this with a valid Russian CEFR dataset via --dataset <hf_path>
+        # when running prepare_data with --language ru.
+        # xlm-roberta-base is used because it supports Cyrillic script and
+        # produces meaningful subword tokens for Russian text.
+        "dataset_name": "UniversalCEFR/cefr_sp_ru",
+        "tokenizer": "xlm-roberta-base",
+        "text_column": "text",
+        "label_column": "cefr_level",
+    },
+}
+
 # Prompt templates
 SENTENCE_PROMPT = (
     "Classify the CEFR level of the following English sentence.\n\n"

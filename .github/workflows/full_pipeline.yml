@@ -19,10 +19,26 @@ on:
           CPU-safe: 0 1 5 6 7 8 9 10  |  Needs GPU: 2 3  |  Needs GPU + HF_TOKEN: 4
         required: true
         default: "0 1 5 7"
-      dataset:
-        description: "HuggingFace dataset for data preparation"
+      language:
+        description: >
+          Language preset for data preparation.
+          'en' uses roberta-base + UniversalCEFR/cefr_sp_en (default).
+          'ru' uses xlm-roberta-base. The default Russian dataset
+          (UniversalCEFR/cefr_sp_ru) is a placeholder – override it with
+          --dataset when using 'ru'.
         required: false
-        default: "UniversalCEFR/cefr_sp_en"
+        default: "en"
+        type: choice
+        options:
+          - en
+          - ru
+      dataset:
+        description: >
+          HuggingFace dataset for data preparation.
+          Leave empty to use the default for the selected language preset.
+          For Russian (language=ru), provide a valid Russian CEFR dataset path.
+        required: false
+        default: ""
       epochs:
         description: "Training epochs (Exp 2-4 only)"
         required: false
@@ -54,9 +70,9 @@ jobs:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 – Data preparation
-# Downloads the UniversalCEFR dataset, tokenises with roberta-base,
-# applies length-based track filtering, and saves JSONL splits for BOTH
-# the sentence and essay tracks.  The artifact is named 'prepared-data'
+# Downloads the dataset, tokenises (roberta-base for English, xlm-roberta-base
+# for Russian), applies length-based track filtering, and saves JSONL splits
+# for BOTH the sentence and essay tracks.  The artifact is named 'prepared-data'
 # (no task suffix) because both tracks are always generated together.
 # ─────────────────────────────────────────────────────────────────────────────
   prepare-data:
@@ -85,9 +101,12 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          python -m src.prepare_data \
-            --dataset "${{ inputs.dataset }}" \
-            --output  data/
+          # Build the command: always pass --language; optionally override --dataset.
+          CMD="python -m src.prepare_data --language ${{ inputs.language }} --output data/"
+          if [ -n "${{ inputs.dataset }}" ]; then
+            CMD="$CMD --dataset ${{ inputs.dataset }}"
+          fi
+          eval $CMD
 
       - name: Upload prepared splits (both tracks)
         uses: actions/upload-artifact@v4
@@ -360,6 +379,7 @@ jobs:
             "run_number": "${{ github.run_number }}",
             "task": "${{ inputs.task }}",
             "exps": "${{ inputs.exps }}",
+            "language": "${{ inputs.language }}",
             "dataset": "${{ inputs.dataset }}",
             "triggered_by": "${{ github.actor }}",
             "ref": "${{ github.ref }}",
@@ -379,7 +399,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No new result files to commit – nothing to push."
           else
-            git commit -m "ci: save experiment results run #${{ github.run_number }} (task=${{ inputs.task }}, exps=${{ inputs.exps }}) [skip ci]"
+            git commit -m "ci: save experiment results run #${{ github.run_number }} (task=${{ inputs.task }}, lang=${{ inputs.language }}, exps=${{ inputs.exps }}) [skip ci]"
             # Pull with rebase first to handle concurrent pipeline runs on the same branch,
             # then push. Retry once on conflict.
             git pull --rebase origin "${GITHUB_REF_NAME}" || true

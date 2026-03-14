@@ -59,10 +59,30 @@ def load_dataset(
     Returns:
         texts: list of text strings
         labels: list of integer label ids
+
+    Raises:
+        ValueError: if the dataset is not found on the HuggingFace Hub.
     """
     from datasets import load_dataset as hf_load_dataset
 
-    dataset = hf_load_dataset(dataset_name, split=split)
+    try:
+        dataset = hf_load_dataset(dataset_name, split=split)
+    except Exception as exc:
+        # Provide a helpful message when the dataset does not exist or is
+        # not accessible, e.g. when using an unsupported language preset.
+        exc_name = type(exc).__name__
+        if "DatasetNotFoundError" in exc_name or "not found" in str(exc).lower():
+            raise ValueError(
+                f"Dataset '{dataset_name}' was not found on the HuggingFace Hub "
+                f"or cannot be accessed.\n"
+                f"  • Check that the dataset path is correct.\n"
+                f"  • If the dataset is private, ensure HF_TOKEN is set.\n"
+                f"  • If using a language preset whose default dataset does not "
+                f"yet exist, supply a valid dataset path via --dataset <hf_path>.\n"
+                f"Original error: {exc}"
+            ) from exc
+        raise
+
     texts, labels = [], []
     for sample in dataset:
         text = sample.get(text_column, "")
