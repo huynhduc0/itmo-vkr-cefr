@@ -78,6 +78,13 @@ DATASET_CONFIG = {
     "label_column": "cefr_level",
 }
 
+# Dataset paths that are intentional placeholders and do NOT exist on the Hub.
+# prepare_data.py uses this set for early validation so users get a fast, clear
+# error rather than a confusing network failure.
+PLACEHOLDER_DATASETS = {
+    "UniversalCEFR/cefr_sp_ru",
+}
+
 # Language-specific presets for data preparation.
 # Each entry maps a language code to its default dataset, tokenizer, and
 # column names so that --language en / --language ru sets sensible defaults

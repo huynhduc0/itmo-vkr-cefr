@@ -434,3 +434,58 @@ class TestLoadDatasetErrorHandling:
 
         with pytest.raises(ValueError, match="--dataset"):
             load_dataset("UniversalCEFR/cefr_sp_ru")
+
+
+# ---------------------------------------------------------------------------
+# PLACEHOLDER_DATASETS constant (config.py)
+# ---------------------------------------------------------------------------
+
+class TestPlaceholderDatasets:
+    def test_placeholder_datasets_exists_in_config(self):
+        from src.config import PLACEHOLDER_DATASETS
+        assert isinstance(PLACEHOLDER_DATASETS, set)
+
+    def test_ru_placeholder_is_listed(self):
+        from src.config import PLACEHOLDER_DATASETS
+        assert "UniversalCEFR/cefr_sp_ru" in PLACEHOLDER_DATASETS
+
+    def test_en_dataset_is_not_a_placeholder(self):
+        from src.config import PLACEHOLDER_DATASETS
+        assert "UniversalCEFR/cefr_sp_en" not in PLACEHOLDER_DATASETS
+
+
+# ---------------------------------------------------------------------------
+# prepare_data.py placeholder validation (early-fail before any network call)
+# ---------------------------------------------------------------------------
+
+class TestPrepareDataPlaceholderValidation:
+    """parse_args() must reject placeholder datasets before any network I/O."""
+
+    def test_ru_language_without_dataset_exits(self):
+        """Using --language ru without --dataset must exit with an error."""
+        import pytest
+        from unittest.mock import patch
+
+        with patch("sys.argv", ["prepare_data", "--language", "ru"]):
+            from src.prepare_data import parse_args
+            with pytest.raises(SystemExit) as exc_info:
+                parse_args()
+            assert exc_info.value.code != 0
+
+    def test_ru_language_with_explicit_dataset_is_accepted(self, tmp_path):
+        """Using --language ru with --dataset must NOT raise SystemExit."""
+        from unittest.mock import patch
+
+        with patch(
+            "sys.argv",
+            [
+                "prepare_data",
+                "--language", "ru",
+                "--dataset", "some_org/some_valid_dataset",
+                "--output", str(tmp_path),
+            ],
+        ):
+            from src.prepare_data import parse_args
+            args = parse_args()
+            assert args.dataset == "some_org/some_valid_dataset"
+            assert args.language == "ru"
