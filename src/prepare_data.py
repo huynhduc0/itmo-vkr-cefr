@@ -1,16 +1,28 @@
 """
 Standalone data preparation script for CEFR classification (DATA_PREP.md).
 
-Loads a UniversalCEFR English dataset, applies text normalisation, computes
-token lengths with a RoBERTa tokenizer, creates sentence-level and essay-level
+Loads a UniversalCEFR dataset, applies text normalisation, computes
+token lengths with a tokenizer, creates sentence-level and essay-level
 track splits, and saves them as JSONL files.
+
+Supported languages (--language):
+    en  English – dataset: UniversalCEFR/cefr_sp_en, tokenizer: roberta-base
+    ru  Russian – tokenizer: xlm-roberta-base
+        The default dataset for Russian (UniversalCEFR/cefr_sp_ru) is a
+        placeholder. Pass a valid Russian CEFR dataset via --dataset.
 
 Usage:
     python -m src.prepare_data [OPTIONS]
 
 Examples:
-    # Prepare both tracks from the default dataset:
+    # Prepare both tracks from the default English dataset:
     python -m src.prepare_data --output data/
+
+    # Use the Russian language preset (requires a valid Russian CEFR dataset):
+    python -m src.prepare_data \
+        --language ru \
+        --dataset  <your_russian_cefr_dataset> \
+        --output   data/cefr_ru/
 
     # Use a different dataset (e.g. for domain transfer):
     python -m src.prepare_data \
@@ -37,7 +49,7 @@ import argparse
 import json
 import os
 
-from src.config import DATA_PREP_CONFIG, DATASET_CONFIG, ID2LABEL, RANDOM_SEED
+from src.config import DATA_PREP_CONFIG, DATASET_CONFIG, ID2LABEL, LANGUAGE_PRESETS, RANDOM_SEED
 from src.data_utils import (
     get_label_distribution,
     load_and_prepare_tracks,
@@ -50,24 +62,34 @@ def parse_args():
         description="Prepare CEFR sentence/essay track splits and save as JSONL"
     )
     parser.add_argument(
+        "--language",
+        default=None,
+        choices=list(LANGUAGE_PRESETS.keys()),
+        help=(
+            "Language preset (e.g. 'en', 'ru'). When set, the dataset, "
+            "tokenizer, text_column and label_column defaults are loaded from "
+            "the preset. Individual flags still override the preset values."
+        ),
+    )
+    parser.add_argument(
         "--dataset",
-        default=DATASET_CONFIG["dataset_name"],
-        help="HuggingFace dataset name (default: %(default)s)",
+        default=None,
+        help="HuggingFace dataset name (default: from --language preset or DATASET_CONFIG)",
     )
     parser.add_argument(
         "--text_column",
-        default=DATASET_CONFIG["text_column"],
-        help="Dataset field containing the text (default: %(default)s)",
+        default=None,
+        help="Dataset field containing the text (default: from --language preset or DATASET_CONFIG)",
     )
     parser.add_argument(
         "--label_column",
-        default=DATASET_CONFIG["label_column"],
-        help="Dataset field containing the CEFR label (default: %(default)s)",
+        default=None,
+        help="Dataset field containing the CEFR label (default: from --language preset or DATASET_CONFIG)",
     )
     parser.add_argument(
         "--tokenizer",
-        default=DATA_PREP_CONFIG["tokenizer"],
-        help="HuggingFace tokenizer for token counting (default: %(default)s)",
+        default=None,
+        help="HuggingFace tokenizer for token counting (default: from --language preset or DATA_PREP_CONFIG)",
     )
     parser.add_argument(
         "--sent_min",
@@ -104,7 +126,32 @@ def parse_args():
         default=RANDOM_SEED,
         help="Random seed (default: %(default)s)",
     )
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    # Apply language preset defaults; individual flags take precedence.
+    if args.language is not None:
+        preset = LANGUAGE_PRESETS[args.language]
+        if args.dataset is None:
+            args.dataset = preset["dataset_name"]
+        if args.tokenizer is None:
+            args.tokenizer = preset["tokenizer"]
+        if args.text_column is None:
+            args.text_column = preset["text_column"]
+        if args.label_column is None:
+            args.label_column = preset["label_column"]
+
+    # Fall back to global defaults when no language preset is used.
+    if args.dataset is None:
+        args.dataset = DATASET_CONFIG["dataset_name"]
+    if args.tokenizer is None:
+        args.tokenizer = DATA_PREP_CONFIG["tokenizer"]
+    if args.text_column is None:
+        args.text_column = DATASET_CONFIG["text_column"]
+    if args.label_column is None:
+        args.label_column = DATASET_CONFIG["label_column"]
+
+    return args
 
 
 def _print_track_summary(
@@ -129,6 +176,8 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
+    if args.language:
+        print(f"Language   : {args.language}")
     print(f"Dataset    : {args.dataset}")
     print(f"Tokenizer  : {args.tokenizer}")
     print(f"Sent range : {args.sent_min} – {args.sent_max} tokens")
