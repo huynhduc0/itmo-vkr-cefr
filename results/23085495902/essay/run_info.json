@@ -1,0 +1,11 @@
+{
+  "run_id": "23085495902",
+  "run_number": "5",
+  "task": "essay",
+  "exps": "0 1 5 6 7 8 9 10",
+  "dataset": "UniversalCEFR/cefr_sp_en",
+  "triggered_by": "huynhduc0",
+  "ref": "refs/heads/main",
+  "sha": "2a997be7b4736575914a266438090e1fc34eced9",
+  "timestamp": "2026-03-14T09:49:34Z"
+}

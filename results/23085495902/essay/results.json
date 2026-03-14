@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Exp 6 – Domain Transfer (TF-IDF+LR)",
+    "track": "essay",
+    "accuracy": 0.887034,
+    "macro_f1": 0.760266,
+    "qwk": 0.916884,
+    "latency_ms": 0.1098,
+    "note": "train=UniversalCEFR/cefr_sp_en → eval=UniversalCEFR/cefr_sp_en"
+  }
+]
