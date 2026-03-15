@@ -49,7 +49,14 @@ import argparse
 import json
 import os
 
-from src.config import DATA_PREP_CONFIG, DATASET_CONFIG, ID2LABEL, LANGUAGE_PRESETS, RANDOM_SEED
+from src.config import (
+    DATA_PREP_CONFIG,
+    DATASET_CONFIG,
+    ID2LABEL,
+    LANGUAGE_PRESETS,
+    PLACEHOLDER_DATASETS,
+    RANDOM_SEED,
+)
 from src.data_utils import (
     get_label_distribution,
     load_and_prepare_tracks,
@@ -150,6 +157,19 @@ def parse_args():
         args.text_column = DATASET_CONFIG["text_column"]
     if args.label_column is None:
         args.label_column = DATASET_CONFIG["label_column"]
+
+    # Fail fast when the resolved dataset is a known placeholder that does not
+    # exist on the HuggingFace Hub.  This prevents an obscure network error and
+    # guides the user to supply a real dataset path.
+    if args.dataset in PLACEHOLDER_DATASETS:
+        lang_hint = f" --language {args.language}" if args.language else ""
+        parser.error(
+            f"The dataset {args.dataset!r} is a placeholder and does not yet "
+            f"exist on the HuggingFace Hub.\n"
+            f"Supply a real dataset path with --dataset <hf_path>, e.g.:\n"
+            f"  python -m src.prepare_data{lang_hint} "
+            f"--dataset your_org/your_russian_cefr_dataset --output data/"
+        )
 
     return args
 

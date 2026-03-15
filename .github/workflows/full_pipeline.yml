@@ -97,6 +97,16 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
+      - name: Validate language / dataset combination
+        run: |
+          if [[ "${{ inputs.language }}" == "ru" && -z "${{ inputs.dataset }}" ]]; then
+            echo "::error::The 'ru' language preset requires the 'dataset' input to be set."
+            echo "The default Russian dataset (UniversalCEFR/cefr_sp_ru) is a placeholder"
+            echo "and does not exist on HuggingFace Hub."
+            echo "Re-trigger this workflow and supply a valid Russian CEFR dataset path."
+            exit 1
+          fi
+
       - name: Prepare sentence and essay splits
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}

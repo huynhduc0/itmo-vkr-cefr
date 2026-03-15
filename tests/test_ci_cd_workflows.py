@@ -40,3 +40,14 @@ def test_full_pipeline_has_manual_trigger_and_cpu_experiment_filter():
     assert "contains(inputs.exps, '8')" in content
     assert "contains(inputs.exps, '9')" in content
     assert "contains(inputs.exps, '10')" in content
+
+
+def test_full_pipeline_validates_ru_preset_requires_dataset():
+    """Workflow must reject language=ru without a dataset override."""
+    content = _read(".github/workflows/full_pipeline.yml")
+
+    # The workflow must contain an explicit validation step for the ru / no-dataset case.
+    assert "inputs.language" in content
+    assert "inputs.dataset" in content
+    assert "ru" in content
+    assert "placeholder" in content.lower() or "cefr_sp_ru" in content
