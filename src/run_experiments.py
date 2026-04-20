@@ -525,21 +525,23 @@ def run_exp10(
     test_labels: List[int],
     track: str,
 ) -> ExperimentResult:
+    from sklearn.base import clone
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
     from sklearn.naive_bayes import ComplementNB
     from sklearn.pipeline import FeatureUnion, Pipeline
 
-    word = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
-    char = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
-    union = FeatureUnion([("word", word), ("char", char)])
+    def _make_union():
+        word = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
+        char = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
+        return FeatureUnion([("word", word), ("char", char)])
 
     lr_pipe = Pipeline([
-        ("features", union),
+        ("features", _make_union()),
         ("clf", LogisticRegression(max_iter=1000, solver="lbfgs")),
     ])
     nb_pipe = Pipeline([
-        ("features", union),
+        ("features", _make_union()),
         ("clf", ComplementNB(alpha=0.5)),
     ])
 
@@ -688,7 +690,7 @@ def run_exp13(
 
 
 # ---------------------------------------------------------------------------
-# Exp 14 – LLM + LoRA self-consistency (multi-seed vote)
+# Exp 14 – LLM + LoRA self-consistency (multi-seed averaging)
 # ---------------------------------------------------------------------------
 
 def run_exp14(
@@ -701,7 +703,7 @@ def run_exp14(
     track: str,
     seed: int = RANDOM_SEED,
 ) -> ExperimentResult:
-    votes = []
+    runs = []
     latencies = []
     for delta in [0, 1, 2]:
         r = run_exp4(
@@ -714,16 +716,16 @@ def run_exp14(
             track=track,
             seed=seed + delta,
         )
-        votes.append(r)
+        runs.append(r)
         latencies.append(r.latency)
 
     # Aggregate by metric averaging as a stable proxy of self-consistency.
     return ExperimentResult(
         name="Exp 14 – LLM+LoRA Self-Consistency",
         track=track,
-        accuracy=float(np.mean([v.accuracy for v in votes])),
-        macro_f1=float(np.mean([v.macro_f1 for v in votes])),
-        qwk=float(np.mean([v.qwk for v in votes])),
+        accuracy=float(np.mean([v.accuracy for v in runs])),
+        macro_f1=float(np.mean([v.macro_f1 for v in runs])),
+        qwk=float(np.mean([v.qwk for v in runs])),
         latency=float(np.mean(latencies)),
         note="mean over 3 seeds",
     )
@@ -882,7 +884,7 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
-    # Load data (shared across Exp 0–5)
+    # Load data (shared across Exp 0–5 and Exp 7–14)
     if any(e in args.exps for e in [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14]):
         if args.data_dir:
             print(f"Loading splits from JSONL: {args.data_dir}/{args.task}/")

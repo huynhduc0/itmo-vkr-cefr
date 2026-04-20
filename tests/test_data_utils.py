@@ -361,3 +361,147 @@ class TestJsonl:
             save_jsonl([], path)
             loaded = load_jsonl(path)
         assert loaded == []
+
+
+# ---------------------------------------------------------------------------
+# Language presets (config.py)
+# ---------------------------------------------------------------------------
+
+class TestLanguagePresets:
+    def test_english_preset_exists(self):
+        from src.config import LANGUAGE_PRESETS
+        assert "en" in LANGUAGE_PRESETS
+
+    def test_russian_preset_exists(self):
+        from src.config import LANGUAGE_PRESETS
+        assert "ru" in LANGUAGE_PRESETS
+
+    def test_english_preset_uses_roberta(self):
+        from src.config import LANGUAGE_PRESETS
+        assert LANGUAGE_PRESETS["en"]["tokenizer"] == "roberta-base"
+
+    def test_russian_preset_uses_xlm_roberta(self):
+        from src.config import LANGUAGE_PRESETS
+        assert LANGUAGE_PRESETS["ru"]["tokenizer"] == "xlm-roberta-base"
+
+    def test_presets_have_required_keys(self):
+        from src.config import LANGUAGE_PRESETS
+        required = {"dataset_name", "tokenizer", "text_column", "label_column"}
+        for lang, preset in LANGUAGE_PRESETS.items():
+            assert required == set(preset.keys()), f"Preset '{lang}' is missing keys"
+
+
+# ---------------------------------------------------------------------------
+# load_dataset error handling
+# ---------------------------------------------------------------------------
+
+class TestLoadDatasetErrorHandling:
+    def test_dataset_not_found_raises_value_error(self, monkeypatch):
+        """DatasetNotFoundError should be re-raised as a descriptive ValueError."""
+        import sys
+        from unittest.mock import MagicMock
+
+        class _FakeDatasetNotFoundError(Exception):
+            pass
+
+        mock_ds_module = MagicMock()
+        mock_ds_module.load_dataset.side_effect = _FakeDatasetNotFoundError(
+            "Dataset 'bad/dataset' doesn't exist on the Hub or cannot be accessed."
+        )
+        monkeypatch.setitem(sys.modules, "datasets", mock_ds_module)
+
+        from src.data_utils import load_dataset
+
+        with pytest.raises(ValueError, match="not found on the HuggingFace Hub"):
+            load_dataset("bad/dataset")
+
+    def test_dataset_not_found_error_message_mentions_dataset_name(self, monkeypatch):
+        import sys
+        from unittest.mock import MagicMock
+
+        class _FakeDatasetNotFoundError(Exception):
+            pass
+
+        mock_ds_module = MagicMock()
+        mock_ds_module.load_dataset.side_effect = _FakeDatasetNotFoundError(
+            "Dataset 'UniversalCEFR/cefr_sp_ru' doesn't exist"
+        )
+        monkeypatch.setitem(sys.modules, "datasets", mock_ds_module)
+
+        from src.data_utils import load_dataset
+
+        with pytest.raises(ValueError, match="UniversalCEFR/cefr_sp_ru"):
+            load_dataset("UniversalCEFR/cefr_sp_ru")
+
+    def test_dataset_not_found_error_message_suggests_dataset_override(self, monkeypatch):
+        import sys
+        from unittest.mock import MagicMock
+
+        class _FakeDatasetNotFoundError(Exception):
+            pass
+
+        mock_ds_module = MagicMock()
+        mock_ds_module.load_dataset.side_effect = _FakeDatasetNotFoundError(
+            "Dataset 'UniversalCEFR/cefr_sp_ru' doesn't exist"
+        )
+        monkeypatch.setitem(sys.modules, "datasets", mock_ds_module)
+
+        from src.data_utils import load_dataset
+
+        with pytest.raises(ValueError, match="--dataset"):
+            load_dataset("UniversalCEFR/cefr_sp_ru")
+
+
+# ---------------------------------------------------------------------------
+# PLACEHOLDER_DATASETS constant (config.py)
+# ---------------------------------------------------------------------------
+
+class TestPlaceholderDatasets:
+    def test_placeholder_datasets_exists_in_config(self):
+        from src.config import PLACEHOLDER_DATASETS
+        assert isinstance(PLACEHOLDER_DATASETS, set)
+
+    def test_ru_placeholder_is_listed(self):
+        from src.config import PLACEHOLDER_DATASETS
+        assert "UniversalCEFR/cefr_sp_ru" in PLACEHOLDER_DATASETS
+
+    def test_en_dataset_is_not_a_placeholder(self):
+        from src.config import PLACEHOLDER_DATASETS
+        assert "UniversalCEFR/cefr_sp_en" not in PLACEHOLDER_DATASETS
+
+
+# ---------------------------------------------------------------------------
+# prepare_data.py placeholder validation (early-fail before any network call)
+# ---------------------------------------------------------------------------
+
+class TestPrepareDataPlaceholderValidation:
+    """parse_args() must reject placeholder datasets before any network I/O."""
+
+    def test_ru_language_without_dataset_exits(self):
+        """Using --language ru without --dataset must exit with an error."""
+        import pytest
+        from unittest.mock import patch
+
+        with patch("sys.argv", ["prepare_data", "--language", "ru"]):
+            from src.prepare_data import parse_args
+            with pytest.raises(SystemExit) as exc_info:
+                parse_args()
+            assert exc_info.value.code != 0
+
+    def test_ru_language_with_explicit_dataset_is_accepted(self, tmp_path):
+        """Using --language ru with --dataset must NOT raise SystemExit."""
+        from unittest.mock import patch
+
+        with patch(
+            "sys.argv",
+            [
+                "prepare_data",
+                "--language", "ru",
+                "--dataset", "some_org/some_valid_dataset",
+                "--output", str(tmp_path),
+            ],
+        ):
+            from src.prepare_data import parse_args
+            args = parse_args()
+            assert args.dataset == "some_org/some_valid_dataset"
+            assert args.language == "ru"
