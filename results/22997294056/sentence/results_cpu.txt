@@ -1,0 +1,31 @@
+Loading splits from JSONL: data//sentence/
+Train: 8002, Val: 1000, Test: 1001
+
+--- Exp 0: Majority baseline ---
+  Majority class: majority=B2, Accuracy: 0.3327
+
+--- Exp 1: TF-IDF + LR ---
+
+--- Exp 5: Hybrid essay (sentence agg) ---
+
+--- Exp 7: TF-IDF + LinearSVC ---
+
+--- Exp 8: TF-IDF + ComplementNB ---
+
+--- Exp 9: Word TF-IDF + LR ---
+
+--- Exp 10: Ensemble (LR + ComplementNB) ---
+
+--------------------------------------------------------------------------------------------
+Experiment                                    Track         Acc     F1    QWK   Lat(ms) Note
+--------------------------------------------------------------------------------------------
+Exp 0 – Majority                              sentence   0.3327 0.0832 0.0000     0.00ms  majority=B2
+Exp 1 – TF-IDF+LR                             sentence   0.5285 0.4265 0.6633     0.16ms  
+Exp 5 – Hybrid (mean_prob)                    sentence   0.5285 0.4267 0.6630     2.16ms  
+Exp 7 – TF-IDF+LinearSVC                      sentence   0.5195 0.4545 0.6996     0.10ms  
+Exp 8 – TF-IDF+ComplementNB                   sentence   0.5205 0.4222 0.6717     0.10ms  
+Exp 9 – Word TF-IDF+LR                        sentence   0.4945 0.3205 0.5757     0.06ms  
+Exp 10 – Ensemble (LR+CNB)                    sentence   0.5295 0.4215 0.6800     0.20ms  
+--------------------------------------------------------------------------------------------
+Results saved → results/results.json
+Results saved → results/results.csv

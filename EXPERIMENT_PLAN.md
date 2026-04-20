@@ -128,6 +128,7 @@ The same label space is used in all experiments.
 - **Method**: run Exp 4 with multiple seeds and average metrics as a self-consistency estimate.
 - **Purpose**: reduce variance and evaluate stability of instruction-tuned LLM predictions.
 
+
 ## 6. Hyperparameter search
 
 For Exp 2–Exp 4:
