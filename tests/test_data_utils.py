@@ -4,7 +4,9 @@ Unit tests for data utilities.
 
 import json
 import os
+import sys
 import tempfile
+import types
 
 import pytest
 
@@ -135,7 +137,9 @@ class TestLoadDataset:
         def _boom(*args, **kwargs):
             raise Exception("403 Forbidden")
 
-        monkeypatch.setattr("datasets.load_dataset", _boom)
+        fake_datasets = types.ModuleType("datasets")
+        fake_datasets.load_dataset = _boom
+        monkeypatch.setitem(sys.modules, "datasets", fake_datasets)
 
         with pytest.raises(RuntimeError, match="Failed to download/load dataset"):
             load_dataset(dataset_name="UniversalCEFR/cefr_sp_en")
