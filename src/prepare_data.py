@@ -7,9 +7,10 @@ track splits, and saves them as JSONL files.
 
 Supported languages (--language):
     en  English – dataset: UniversalCEFR/cefr_sp_en, tokenizer: roberta-base
-    ru  Russian – tokenizer: xlm-roberta-base
-        The default dataset for Russian (UniversalCEFR/cefr_sp_ru) is a
-        placeholder. Pass a valid Russian CEFR dataset via --dataset.
+    ru, it, es, de, fr
+        Multilingual presets – tokenizer: xlm-roberta-base
+    all
+        Prepare all supported languages under <output>/<lang>/
 
 Usage:
     python -m src.prepare_data [OPTIONS]
@@ -18,11 +19,11 @@ Examples:
     # Prepare both tracks from the default English dataset:
     python -m src.prepare_data --output data/
 
-    # Use the Russian language preset (requires a valid Russian CEFR dataset):
+    # Use a non-English language preset (requires a valid CEFR dataset):
     python -m src.prepare_data \
-        --language ru \
-        --dataset  <your_russian_cefr_dataset> \
-        --output   data/cefr_ru/
+        --language de \
+        --dataset  <your_cefr_dataset> \
+        --output   data/cefr_de/
 
     # Use a different dataset (e.g. for domain transfer):
     python -m src.prepare_data \
@@ -46,16 +47,16 @@ Each JSONL line:
 """
 
 import argparse
-import json
 import os
 
 from src.config import (
     DATA_PREP_CONFIG,
     DATASET_CONFIG,
-    ID2LABEL,
+    LANGUAGE_CHOICES,
     LANGUAGE_PRESETS,
     PLACEHOLDER_DATASETS,
     RANDOM_SEED,
+    SUPPORTED_LANGUAGES,
 )
 from src.data_utils import (
     get_label_distribution,
@@ -71,9 +72,9 @@ def parse_args():
     parser.add_argument(
         "--language",
         default=None,
-        choices=list(LANGUAGE_PRESETS.keys()),
+        choices=LANGUAGE_CHOICES,
         help=(
-            "Language preset (e.g. 'en', 'ru'). When set, the dataset, "
+            "Language preset (e.g. 'en', 'ru', 'all'). When set, the dataset, "
             "tokenizer, text_column and label_column defaults are loaded from "
             "the preset. Individual flags still override the preset values."
         ),
@@ -136,8 +137,15 @@ def parse_args():
 
     args = parser.parse_args()
 
+    if args.language == "all" and args.dataset is not None:
+        parser.error(
+            "--language all prepares multiple datasets, so --dataset cannot be "
+            "a single shared value. Leave --dataset unset and the per-language "
+            "defaults will be used."
+        )
+
     # Apply language preset defaults; individual flags take precedence.
-    if args.language is not None:
+    if args.language is not None and args.language != "all":
         preset = LANGUAGE_PRESETS[args.language]
         if args.dataset is None:
             args.dataset = preset["dataset_name"]
@@ -149,13 +157,13 @@ def parse_args():
             args.label_column = preset["label_column"]
 
     # Fall back to global defaults when no language preset is used.
-    if args.dataset is None:
+    if args.dataset is None and args.language != "all":
         args.dataset = DATASET_CONFIG["dataset_name"]
-    if args.tokenizer is None:
+    if args.tokenizer is None and args.language != "all":
         args.tokenizer = DATA_PREP_CONFIG["tokenizer"]
-    if args.text_column is None:
+    if args.text_column is None and args.language != "all":
         args.text_column = DATASET_CONFIG["text_column"]
-    if args.label_column is None:
+    if args.label_column is None and args.language != "all":
         args.label_column = DATASET_CONFIG["label_column"]
 
     # Fail fast when the resolved dataset is a known placeholder that does not
@@ -195,6 +203,39 @@ def _print_track_summary(
 def main():
     args = parse_args()
     set_seed(args.seed)
+
+    if args.language == "all":
+        print(f"Languages  : {', '.join(SUPPORTED_LANGUAGES)}")
+        print(f"Output dir : {args.output}")
+        print(f"Seed       : {args.seed}")
+
+        for language in SUPPORTED_LANGUAGES:
+            preset = LANGUAGE_PRESETS[language]
+            lang_output = os.path.join(args.output, language)
+            print(f"\n=== Preparing {language} ===")
+            print(f"Dataset    : {preset['dataset_name']}")
+            print(f"Tokenizer  : {preset['tokenizer']}")
+            print(f"Output dir : {lang_output}")
+
+            tracks = load_and_prepare_tracks(
+                dataset_name=preset["dataset_name"],
+                text_column=preset["text_column"],
+                label_column=preset["label_column"],
+                tokenizer_name=preset["tokenizer"],
+                sentence_min_tokens=args.sent_min,
+                sentence_max_tokens=args.sent_max,
+                essay_min_tokens=args.essay_min,
+                min_class_samples=args.min_class,
+                seed=args.seed,
+                output_dir=lang_output,
+            )
+
+            print("\nSplit summary:")
+            for track_name, splits in tracks.items():
+                _print_track_summary(track_name, splits)
+
+        print(f"\nJSONL files written to: {os.path.abspath(args.output)}")
+        return
 
     if args.language:
         print(f"Language   : {args.language}")

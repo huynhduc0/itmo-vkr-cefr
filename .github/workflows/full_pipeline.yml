@@ -23,20 +23,24 @@ on:
         description: >
           Language preset for data preparation.
           'en' uses roberta-base + UniversalCEFR/cefr_sp_en (default).
-          'ru' uses xlm-roberta-base. The default Russian dataset
-          (UniversalCEFR/cefr_sp_ru) is a placeholder – override it with
-          --dataset when using 'ru'.
+          'ru', 'it', 'es', 'de', 'fr' use curated public defaults.
+          'all' runs en, ru, it, es, de, fr sequentially.
         required: false
         default: "en"
         type: choice
         options:
           - en
           - ru
+          - it
+          - es
+          - de
+          - fr
+          - all
       dataset:
         description: >
           HuggingFace dataset for data preparation.
           Leave empty to use the default for the selected language preset.
-          For Russian (language=ru), provide a valid Russian CEFR dataset path.
+          For language=all, leave empty.
         required: false
         default: ""
       epochs:
@@ -99,11 +103,12 @@ jobs:
 
       - name: Validate language / dataset combination
         run: |
-          if [[ "${{ inputs.language }}" == "ru" && -z "${{ inputs.dataset }}" ]]; then
-            echo "::error::The 'ru' language preset requires the 'dataset' input to be set."
-            echo "The default Russian dataset (UniversalCEFR/cefr_sp_ru) is a placeholder"
-            echo "and does not exist on HuggingFace Hub."
-            echo "Re-trigger this workflow and supply a valid Russian CEFR dataset path."
+          if [[ "${{ inputs.language }}" == "all" && -n "${{ inputs.dataset }}" ]]; then
+            echo "::error::language=all prepares multiple datasets, so dataset must be left empty."
+            exit 1
+          fi
+          if [[ "${{ inputs.language }}" == "all" && " ${{ inputs.exps }} " == *" 6 "* ]]; then
+            echo "::error::Exp 6 is not supported with language=all because it requires a single dataset/domain pair."
             exit 1
           fi
 
@@ -111,12 +116,16 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Build the command: always pass --language; optionally override --dataset.
-          CMD="python -m src.prepare_data --language ${{ inputs.language }} --output data/"
-          if [ -n "${{ inputs.dataset }}" ]; then
-            CMD="$CMD --dataset ${{ inputs.dataset }}"
+          if [[ "${{ inputs.language }}" == "all" ]]; then
+            python -m src.prepare_data --language all --output data/
+          else
+            # Build the command: always pass --language; optionally override --dataset.
+            CMD="python -m src.prepare_data --language ${{ inputs.language }} --output data/"
+            if [ -n "${{ inputs.dataset }}" ]; then
+              CMD="$CMD --dataset ${{ inputs.dataset }}"
+            fi
+            eval $CMD
           fi
-          eval $CMD
 
       - name: Upload prepared splits (both tracks)
         uses: actions/upload-artifact@v4
@@ -175,12 +184,25 @@ jobs:
             fi
           done
           if [[ -n "$CPU_EXPS" ]]; then
-            python -m src.run_experiments \
-              --task        "${{ inputs.task }}" \
-              --exps        $CPU_EXPS \
-              --data_dir    data/ \
-              --save_results results/ \
-              2>&1 | tee results_cpu.txt
+            if [[ "${{ inputs.language }}" == "all" ]]; then
+              for lang in en ru it es de fr; do
+                python -m src.run_experiments \
+                  --language    "$lang" \
+                  --task        "${{ inputs.task }}" \
+                  --exps        $CPU_EXPS \
+                  --data_dir    "data/$lang" \
+                  --save_results "results/$lang" \
+                  2>&1 | tee "results_cpu_${lang}.txt"
+              done
+            else
+              python -m src.run_experiments \
+                --language    "${{ inputs.language }}" \
+                --task        "${{ inputs.task }}" \
+                --exps        $CPU_EXPS \
+                --data_dir    data/ \
+                --save_results results/ \
+                2>&1 | tee results_cpu.txt
+            fi
           else
             echo "No JSONL CPU experiments (0,1,5,7,8,9,10) requested – skipping."
           fi
@@ -193,6 +215,7 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           python -m src.run_experiments \
+            --language     "${{ inputs.language }}" \
             --task         "${{ inputs.task }}" \
             --exps         6 \
             --dataset      "${{ inputs.dataset }}" \
@@ -255,13 +278,27 @@ jobs:
               TRANS_EXPS="$TRANS_EXPS $exp"
             fi
           done
-          python -m src.run_experiments \
-            --task         "${{ inputs.task }}" \
-            --exps         $TRANS_EXPS \
-            --data_dir     data/ \
-            --epochs       "${{ inputs.epochs }}" \
-            --save_results results/ \
-            2>&1 | tee results_transformer.txt
+          if [[ "${{ inputs.language }}" == "all" ]]; then
+            for lang in en ru it es de fr; do
+              python -m src.run_experiments \
+                --language     "$lang" \
+                --task         "${{ inputs.task }}" \
+                --exps         $TRANS_EXPS \
+                --data_dir     "data/$lang" \
+                --epochs       "${{ inputs.epochs }}" \
+                --save_results "results/$lang" \
+                2>&1 | tee "results_transformer_${lang}.txt"
+            done
+          else
+            python -m src.run_experiments \
+              --language     "${{ inputs.language }}" \
+              --task         "${{ inputs.task }}" \
+              --exps         $TRANS_EXPS \
+              --data_dir     data/ \
+              --epochs       "${{ inputs.epochs }}" \
+              --save_results results/ \
+              2>&1 | tee results_transformer.txt
+          fi
 
       - name: Upload transformer results
         if: always()
@@ -332,13 +369,27 @@ jobs:
               LLM_EXPS="$LLM_EXPS $exp"
             fi
           done
-          python -m src.run_experiments \
-            --task         "${{ inputs.task }}" \
-            --exps         $LLM_EXPS \
-            --data_dir     data/ \
-            --epochs       "${{ inputs.epochs }}" \
-            --save_results results/ \
-            2>&1 | tee results_llm.txt
+          if [[ "${{ inputs.language }}" == "all" ]]; then
+            for lang in en ru it es de fr; do
+              python -m src.run_experiments \
+                --language     "$lang" \
+                --task         "${{ inputs.task }}" \
+                --exps         $LLM_EXPS \
+                --data_dir     "data/$lang" \
+                --epochs       "${{ inputs.epochs }}" \
+                --save_results "results/$lang" \
+                2>&1 | tee "results_llm_${lang}.txt"
+            done
+          else
+            python -m src.run_experiments \
+              --language     "${{ inputs.language }}" \
+              --task         "${{ inputs.task }}" \
+              --exps         $LLM_EXPS \
+              --data_dir     data/ \
+              --epochs       "${{ inputs.epochs }}" \
+              --save_results results/ \
+              2>&1 | tee results_llm.txt
+          fi
 
       - name: Upload LLM results
         if: always()

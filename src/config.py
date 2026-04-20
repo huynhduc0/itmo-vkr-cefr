@@ -78,11 +78,29 @@ DATASET_CONFIG = {
     "label_column": "cefr_level",
 }
 
-# Dataset paths that are intentional placeholders and do NOT exist on the Hub.
-# prepare_data.py uses this set for early validation so users get a fast, clear
-# error rather than a confusing network failure.
+SUPPORTED_LANGUAGES = ("en", "ru", "it", "es", "de", "fr")
+LANGUAGE_CHOICES = SUPPORTED_LANGUAGES + ("all",)
+MULTILINGUAL_LANGUAGES = tuple(lang for lang in SUPPORTED_LANGUAGES if lang != "en")
+MULTILINGUAL_TOKENIZER = "xlm-roberta-base"
+
+# Public dataset defaults validated from UniversalCEFR.
+DEFAULT_LANGUAGE_DATASETS = {
+    "en": "UniversalCEFR/cefr_sp_en",
+    "ru": "UniversalCEFR/readme_ru",
+    "it": "UniversalCEFR/merlin_it",
+    "es": "UniversalCEFR/caes_es",
+    "de": "UniversalCEFR/merlin_de",
+    "fr": "UniversalCEFR/readme_fr",
+}
+
+# No placeholders remain in the default presets, but keep the guard for
+# backwards-compatible overrides if an old placeholder path is passed manually.
 PLACEHOLDER_DATASETS = {
     "UniversalCEFR/cefr_sp_ru",
+    "UniversalCEFR/cefr_sp_it",
+    "UniversalCEFR/cefr_sp_es",
+    "UniversalCEFR/cefr_sp_de",
+    "UniversalCEFR/cefr_sp_fr",
 }
 
 # Language-specific presets for data preparation.
@@ -91,20 +109,38 @@ PLACEHOLDER_DATASETS = {
 # without requiring the user to repeat all options every time.
 LANGUAGE_PRESETS = {
     "en": {
-        "dataset_name": "UniversalCEFR/cefr_sp_en",
+        "dataset_name": DEFAULT_LANGUAGE_DATASETS["en"],
         "tokenizer": "roberta-base",
         "text_column": "text",
         "label_column": "cefr_level",
     },
     "ru": {
-        # Russian CEFR dataset placeholder – the default value (cefr_sp_ru)
-        # does not exist on the HuggingFace Hub yet.  Users MUST override
-        # this with a valid Russian CEFR dataset via --dataset <hf_path>
-        # when running prepare_data with --language ru.
-        # xlm-roberta-base is used because it supports Cyrillic script and
-        # produces meaningful subword tokens for Russian text.
-        "dataset_name": "UniversalCEFR/cefr_sp_ru",
+        "dataset_name": DEFAULT_LANGUAGE_DATASETS["ru"],
         "tokenizer": "xlm-roberta-base",
+        "text_column": "text",
+        "label_column": "cefr_level",
+    },
+    "it": {
+        "dataset_name": DEFAULT_LANGUAGE_DATASETS["it"],
+        "tokenizer": MULTILINGUAL_TOKENIZER,
+        "text_column": "text",
+        "label_column": "cefr_level",
+    },
+    "es": {
+        "dataset_name": DEFAULT_LANGUAGE_DATASETS["es"],
+        "tokenizer": MULTILINGUAL_TOKENIZER,
+        "text_column": "text",
+        "label_column": "cefr_level",
+    },
+    "de": {
+        "dataset_name": DEFAULT_LANGUAGE_DATASETS["de"],
+        "tokenizer": MULTILINGUAL_TOKENIZER,
+        "text_column": "text",
+        "label_column": "cefr_level",
+    },
+    "fr": {
+        "dataset_name": DEFAULT_LANGUAGE_DATASETS["fr"],
+        "tokenizer": MULTILINGUAL_TOKENIZER,
         "text_column": "text",
         "label_column": "cefr_level",
     },
@@ -112,13 +148,31 @@ LANGUAGE_PRESETS = {
 
 # Prompt templates
 SENTENCE_PROMPT = (
-    "Classify the CEFR level of the following English sentence.\n\n"
+    "Classify the CEFR level of the following learner sentence.\n\n"
     "Sentence:\n{text}\n\n"
     "Answer with one label from: A1, A2, B1, B2, C1, C2."
 )
 
 ESSAY_PROMPT = (
-    "Classify the CEFR level of the following English learner text.\n\n"
+    "Classify the CEFR level of the following learner text.\n\n"
     "Text:\n{text}\n\n"
     "Return only one label: A1, A2, B1, B2, C1, C2."
 )
+
+
+def get_default_transformer_model(language: str, track: str) -> str:
+    """Return the default encoder for the requested language/track."""
+    if language == "en":
+        return (
+            TRANSFORMER_CONFIG["sentence_model"]
+            if track == "sentence"
+            else TRANSFORMER_CONFIG["essay_model"]
+        )
+    return MULTILINGUAL_TOKENIZER
+
+
+def get_exp11_transformer_model(language: str) -> str:
+    """Return the stronger encoder used by Exp 11/12."""
+    if language == "en":
+        return "microsoft/deberta-v3-base"
+    return "microsoft/mdeberta-v3-base"

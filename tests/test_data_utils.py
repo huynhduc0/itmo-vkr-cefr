@@ -376,6 +376,15 @@ class TestLanguagePresets:
         from src.config import LANGUAGE_PRESETS
         assert "ru" in LANGUAGE_PRESETS
 
+    def test_multilingual_presets_exist(self):
+        from src.config import LANGUAGE_PRESETS
+        for lang in ("it", "es", "de", "fr"):
+            assert lang in LANGUAGE_PRESETS
+
+    def test_all_language_choice_exists(self):
+        from src.config import LANGUAGE_CHOICES
+        assert "all" in LANGUAGE_CHOICES
+
     def test_english_preset_uses_roberta(self):
         from src.config import LANGUAGE_PRESETS
         assert LANGUAGE_PRESETS["en"]["tokenizer"] == "roberta-base"
@@ -384,11 +393,35 @@ class TestLanguagePresets:
         from src.config import LANGUAGE_PRESETS
         assert LANGUAGE_PRESETS["ru"]["tokenizer"] == "xlm-roberta-base"
 
+    def test_non_english_presets_use_xlm_roberta(self):
+        from src.config import LANGUAGE_PRESETS
+        for lang in ("ru", "it", "es", "de", "fr"):
+            assert LANGUAGE_PRESETS[lang]["tokenizer"] == "xlm-roberta-base"
+
     def test_presets_have_required_keys(self):
         from src.config import LANGUAGE_PRESETS
         required = {"dataset_name", "tokenizer", "text_column", "label_column"}
         for lang, preset in LANGUAGE_PRESETS.items():
             assert required == set(preset.keys()), f"Preset '{lang}' is missing keys"
+
+
+class TestLanguageModelSelection:
+    def test_english_transformer_default_stays_roberta(self):
+        from src.config import get_default_transformer_model
+
+        assert get_default_transformer_model("en", "sentence") == "roberta-base"
+
+    def test_non_english_transformer_default_uses_multilingual_encoder(self):
+        from src.config import get_default_transformer_model
+
+        for lang in ("ru", "it", "es", "de", "fr"):
+            assert get_default_transformer_model(lang, "sentence") == "xlm-roberta-base"
+
+    def test_exp11_non_english_uses_multilingual_deberta(self):
+        from src.config import get_exp11_transformer_model
+
+        for lang in ("ru", "it", "es", "de", "fr"):
+            assert get_exp11_transformer_model(lang) == "microsoft/mdeberta-v3-base"
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +498,17 @@ class TestPlaceholderDatasets:
         from src.config import PLACEHOLDER_DATASETS
         assert "UniversalCEFR/cefr_sp_ru" in PLACEHOLDER_DATASETS
 
+    def test_all_non_english_placeholders_are_listed(self):
+        from src.config import PLACEHOLDER_DATASETS
+        for dataset_name in (
+            "UniversalCEFR/cefr_sp_ru",
+            "UniversalCEFR/cefr_sp_it",
+            "UniversalCEFR/cefr_sp_es",
+            "UniversalCEFR/cefr_sp_de",
+            "UniversalCEFR/cefr_sp_fr",
+        ):
+            assert dataset_name in PLACEHOLDER_DATASETS
+
     def test_en_dataset_is_not_a_placeholder(self):
         from src.config import PLACEHOLDER_DATASETS
         assert "UniversalCEFR/cefr_sp_en" not in PLACEHOLDER_DATASETS
@@ -475,21 +519,18 @@ class TestPlaceholderDatasets:
 # ---------------------------------------------------------------------------
 
 class TestPrepareDataPlaceholderValidation:
-    """parse_args() must reject placeholder datasets before any network I/O."""
+    """parse_args() must reject invalid all/dataset combos and old placeholders."""
 
-    def test_ru_language_without_dataset_exits(self):
-        """Using --language ru without --dataset must exit with an error."""
-        import pytest
+    def test_ru_language_without_dataset_uses_curated_default(self):
         from unittest.mock import patch
 
         with patch("sys.argv", ["prepare_data", "--language", "ru"]):
             from src.prepare_data import parse_args
-            with pytest.raises(SystemExit) as exc_info:
-                parse_args()
-            assert exc_info.value.code != 0
+            args = parse_args()
+            assert args.dataset == "UniversalCEFR/readme_ru"
 
     def test_ru_language_with_explicit_dataset_is_accepted(self, tmp_path):
-        """Using --language ru with --dataset must NOT raise SystemExit."""
+        """Using --language ru with --dataset must override the default."""
         from unittest.mock import patch
 
         with patch(
@@ -505,3 +546,53 @@ class TestPrepareDataPlaceholderValidation:
             args = parse_args()
             assert args.dataset == "some_org/some_valid_dataset"
             assert args.language == "ru"
+
+    @pytest.mark.parametrize(
+        ("language", "dataset_name"),
+        [
+            ("it", "UniversalCEFR/merlin_it"),
+            ("es", "UniversalCEFR/caes_es"),
+            ("de", "UniversalCEFR/merlin_de"),
+            ("fr", "UniversalCEFR/readme_fr"),
+        ],
+    )
+    def test_non_english_language_without_dataset_uses_curated_default(
+        self,
+        language,
+        dataset_name,
+    ):
+        from unittest.mock import patch
+
+        with patch("sys.argv", ["prepare_data", "--language", language]):
+            from src.prepare_data import parse_args
+            args = parse_args()
+            assert args.dataset == dataset_name
+
+    def test_all_language_is_accepted(self, tmp_path):
+        from unittest.mock import patch
+
+        with patch(
+            "sys.argv",
+            ["prepare_data", "--language", "all", "--output", str(tmp_path)],
+        ):
+            from src.prepare_data import parse_args
+            args = parse_args()
+            assert args.language == "all"
+            assert args.dataset is None
+
+    def test_all_language_rejects_single_dataset_override(self, tmp_path):
+        from unittest.mock import patch
+
+        with patch(
+            "sys.argv",
+            [
+                "prepare_data",
+                "--language", "all",
+                "--dataset", "some_org/one_dataset",
+                "--output", str(tmp_path),
+            ],
+        ):
+            from src.prepare_data import parse_args
+            with pytest.raises(SystemExit) as exc_info:
+                parse_args()
+            assert exc_info.value.code != 0

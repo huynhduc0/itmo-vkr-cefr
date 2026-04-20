@@ -26,7 +26,14 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from src.config import DATASET_CONFIG, RANDOM_SEED, TRANSFORMER_CONFIG
+from src.config import (
+    DATASET_CONFIG,
+    LANGUAGE_PRESETS,
+    RANDOM_SEED,
+    TRANSFORMER_CONFIG,
+    get_default_transformer_model,
+    get_exp11_transformer_model,
+)
 from src.data_utils import (
     load_and_split_dataset,
     load_jsonl,
@@ -196,6 +203,7 @@ def run_exp2(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     model_name: Optional[str] = None,
     max_length: Optional[int] = None,
     num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
@@ -205,11 +213,7 @@ def run_exp2(
     from src.transformer_classifier import predict_transformer, train_transformer
 
     if model_name is None:
-        model_name = (
-            TRANSFORMER_CONFIG["sentence_model"]
-            if track == "sentence"
-            else TRANSFORMER_CONFIG["essay_model"]
-        )
+        model_name = get_default_transformer_model(language, track)
     if max_length is None:
         max_length = (
             TRANSFORMER_CONFIG["max_length_sentence"]
@@ -255,6 +259,7 @@ def run_exp3(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     model_name: Optional[str] = None,
     max_length: Optional[int] = None,
     num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
@@ -264,7 +269,7 @@ def run_exp3(
     from src.ordinal_classifier import predict_ordinal, train_ordinal
 
     if model_name is None:
-        model_name = TRANSFORMER_CONFIG["sentence_model"]
+        model_name = get_default_transformer_model(language, track)
     if max_length is None:
         max_length = (
             TRANSFORMER_CONFIG["max_length_sentence"]
@@ -309,6 +314,7 @@ def run_exp4(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     seed: int = RANDOM_SEED,
 ) -> ExperimentResult:
     from src.llm_lora import predict_llm, train_llm_lora
@@ -319,11 +325,12 @@ def run_exp4(
         val_texts=val_texts,
         val_labels=val_labels,
         task=track,
+        language=language,
         seed=seed,
     )
 
     def _pred(texts):
-        return predict_llm(model, tokenizer, texts, task=track)
+        return predict_llm(model, tokenizer, texts, task=track, language=language)
 
     preds, latency = _time_predict(_pred, test_texts)
     valid_mask = preds != -1
@@ -572,6 +579,7 @@ def run_exp11(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
     batch_size: int = TRANSFORMER_CONFIG["batch_size"],
     seed: int = RANDOM_SEED,
@@ -584,7 +592,8 @@ def run_exp11(
         test_texts=test_texts,
         test_labels=test_labels,
         track=track,
-        model_name="microsoft/deberta-v3-base",
+        language=language,
+        model_name=get_exp11_transformer_model(language),
         num_epochs=num_epochs,
         batch_size=batch_size,
         seed=seed,
@@ -603,6 +612,7 @@ def run_exp12(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
     batch_size: int = TRANSFORMER_CONFIG["batch_size"],
     seed: int = RANDOM_SEED,
@@ -615,7 +625,8 @@ def run_exp12(
         test_texts=test_texts,
         test_labels=test_labels,
         track=track,
-        model_name="microsoft/deberta-v3-base",
+        language=language,
+        model_name=get_exp11_transformer_model(language),
         num_epochs=num_epochs,
         batch_size=batch_size,
         seed=seed,
@@ -634,6 +645,7 @@ def run_exp13(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
     batch_size: int = TRANSFORMER_CONFIG["batch_size"],
     seed: int = RANDOM_SEED,
@@ -648,7 +660,7 @@ def run_exp13(
     )
 
     trainer_t, tok_t = train_transformer(
-        model_name=TRANSFORMER_CONFIG["sentence_model"] if track == "sentence" else TRANSFORMER_CONFIG["essay_model"],
+        model_name=get_default_transformer_model(language, track),
         train_texts=train_texts,
         train_labels=train_labels,
         val_texts=val_texts,
@@ -661,7 +673,7 @@ def run_exp13(
     model_t = trainer_t.model
 
     model_o, tok_o = train_ordinal(
-        model_name=TRANSFORMER_CONFIG["sentence_model"],
+        model_name=get_default_transformer_model(language, track),
         train_texts=train_texts,
         train_labels=train_labels,
         val_texts=val_texts,
@@ -701,6 +713,7 @@ def run_exp14(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
     seed: int = RANDOM_SEED,
 ) -> ExperimentResult:
     runs = []
@@ -714,6 +727,7 @@ def run_exp14(
             test_texts=test_texts,
             test_labels=test_labels,
             track=track,
+            language=language,
             seed=seed + delta,
         )
         runs.append(r)
@@ -760,6 +774,12 @@ def print_comparison_table(results: List[ExperimentResult]) -> None:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run CEFR classification experiments")
+    parser.add_argument(
+        "--language",
+        choices=list(LANGUAGE_PRESETS.keys()),
+        default="en",
+        help="Language preset used to select multilingual-safe default models.",
+    )
     parser.add_argument(
         "--task",
         choices=["sentence", "essay"],
@@ -926,6 +946,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -939,6 +960,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -952,6 +974,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             seed=args.seed,
         )
         results.append(r)
@@ -1007,6 +1030,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -1020,6 +1044,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -1033,6 +1058,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -1046,6 +1072,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
+            language=args.language,
             seed=args.seed,
         )
         results.append(r)

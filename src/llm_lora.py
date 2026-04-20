@@ -106,6 +106,7 @@ def apply_lora(model, lora_config=None):
 def format_prompt(
     text: str,
     task: str = "sentence",
+    language: str = "en",
 ) -> str:
     """
     Format a classification prompt for the LLM.
@@ -113,6 +114,7 @@ def format_prompt(
     Args:
         text: input sentence or essay
         task: 'sentence' or 'essay'
+        language: language preset, reserved for multilingual prompt variants
 
     Returns:
         Formatted prompt string.
@@ -126,6 +128,7 @@ def format_sft_example(
     text: str,
     label: int,
     task: str = "sentence",
+    language: str = "en",
 ) -> str:
     """
     Format a supervised fine-tuning example as instruction + answer.
@@ -140,7 +143,7 @@ def format_sft_example(
     """
     from src.config import ID2LABEL
 
-    prompt = format_prompt(text, task)
+    prompt = format_prompt(text, task, language=language)
     answer = ID2LABEL[label]
     return f"{prompt}\n{answer}"
 
@@ -164,6 +167,7 @@ def build_sft_dataset(
     labels: List[int],
     tokenizer,
     task: str = "sentence",
+    language: str = "en",
     max_length: int = LLM_CONFIG["max_length"],
 ):
     """
@@ -175,7 +179,8 @@ def build_sft_dataset(
     class SFTDataset(Dataset):
         def __init__(self):
             self.examples = [
-                format_sft_example(t, l, task) for t, l in zip(texts, labels)
+                format_sft_example(t, l, task, language=language)
+                for t, l in zip(texts, labels)
             ]
             self.encodings = tokenizer(
                 self.examples,
@@ -204,6 +209,7 @@ def train_llm_lora(
     val_labels: List[int] = None,
     output_dir: str = "checkpoints/llm_lora",
     task: str = "sentence",
+    language: str = "en",
     num_epochs: int = LLM_CONFIG["num_epochs"],
     batch_size: int = LLM_CONFIG["batch_size"],
     learning_rate: float = LLM_CONFIG["learning_rate"],
@@ -225,10 +231,10 @@ def train_llm_lora(
     model = apply_lora(model)
 
     train_dataset = build_sft_dataset(
-        train_texts, train_labels, tokenizer, task=task
+        train_texts, train_labels, tokenizer, task=task, language=language
     )
     val_dataset = (
-        build_sft_dataset(val_texts, val_labels, tokenizer, task=task)
+        build_sft_dataset(val_texts, val_labels, tokenizer, task=task, language=language)
         if val_texts
         else None
     )
@@ -264,6 +270,7 @@ def predict_llm(
     tokenizer,
     texts: List[str],
     task: str = "sentence",
+    language: str = "en",
     max_new_tokens: int = 10,
 ) -> np.ndarray:
     """
@@ -277,7 +284,7 @@ def predict_llm(
     model.eval()
     predictions = []
     for text in texts:
-        prompt = format_prompt(text, task)
+        prompt = format_prompt(text, task, language=language)
         inputs = tokenizer(prompt, return_tensors="pt")
         device = next(model.parameters()).device
         inputs = {k: v.to(device) for k, v in inputs.items()}
