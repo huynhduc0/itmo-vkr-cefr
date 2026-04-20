@@ -62,7 +62,14 @@ def load_dataset(
     """
     from datasets import load_dataset as hf_load_dataset
 
-    dataset = hf_load_dataset(dataset_name, split=split)
+    try:
+        dataset = hf_load_dataset(dataset_name, split=split)
+    except Exception as exc:
+        raise RuntimeError(
+            "Failed to download/load dataset from HuggingFace Hub. "
+            "Check network/proxy access (HTTPS to huggingface.co) and auth token if needed. "
+            f"dataset={dataset_name}, split={split}. Original error: {exc}"
+        ) from exc
     texts, labels = [], []
     for sample in dataset:
         text = sample.get(text_column, "")

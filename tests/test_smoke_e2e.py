@@ -129,6 +129,44 @@ class TestEndToEndExp5:
 
 
 # ---------------------------------------------------------------------------
+# Exp 7-10 – Additional CPU baselines
+# ---------------------------------------------------------------------------
+
+class TestEndToEndExtraCpuExperiments:
+    def test_exp7_linear_svc(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp7
+
+        r = run_exp7(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 7")
+        assert 0.0 <= r.accuracy <= 1.0
+
+    def test_exp8_complement_nb(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp8
+
+        r = run_exp8(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 8")
+        assert 0.0 <= r.accuracy <= 1.0
+
+    def test_exp9_word_only_lr(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp9
+
+        r = run_exp9(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 9")
+        assert 0.0 <= r.accuracy <= 1.0
+
+    def test_exp10_ensemble(self, splits):
+        (tr_t, tr_l), _, (te_t, te_l) = splits
+        from src.run_experiments import run_exp10
+
+        r = run_exp10(tr_t, tr_l, te_t, te_l, track="sentence")
+        assert r.name.startswith("Exp 10")
+        assert 0.0 <= r.accuracy <= 1.0
+
+
+# ---------------------------------------------------------------------------
 # Comparison table
 # ---------------------------------------------------------------------------
 
@@ -212,6 +250,36 @@ class TestJsonlDataFlow:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with pytest.raises(FileNotFoundError, match="train.jsonl"):
+                _load_splits_from_jsonl(tmpdir, "sentence")
+
+    def test_load_splits_accepts_integer_labels(self, splits):
+        from src.run_experiments import _load_splits_from_jsonl
+
+        (tr_t, tr_l), (va_t, va_l), (te_t, te_l) = splits
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for split_name, (texts, labels) in [
+                ("train", (tr_t, tr_l)),
+                ("dev", (va_t, va_l)),
+                ("test", (te_t, te_l)),
+            ]:
+                records = [{"text": t, "label": l} for t, l in zip(texts, labels)]
+                save_jsonl(records, os.path.join(tmpdir, "sentence", f"{split_name}.jsonl"))
+
+            (_, tr_labels), (_, va_labels), (_, te_labels) = _load_splits_from_jsonl(tmpdir, "sentence")
+
+        assert all(isinstance(l, int) for l in tr_labels + va_labels + te_labels)
+        assert set(tr_labels).issubset(set(range(6)))
+
+    def test_load_splits_invalid_record_raises_clear_error(self):
+        from src.run_experiments import _load_splits_from_jsonl
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Missing label key on purpose.
+            save_jsonl([{"text": "hello"}], os.path.join(tmpdir, "sentence", "train.jsonl"))
+            save_jsonl([{"text": "world", "label": "A1"}], os.path.join(tmpdir, "sentence", "dev.jsonl"))
+            save_jsonl([{"text": "!", "label": "A2"}], os.path.join(tmpdir, "sentence", "test.jsonl"))
+
+            with pytest.raises(KeyError, match="expected keys 'text' and 'label'"):
                 _load_splits_from_jsonl(tmpdir, "sentence")
 
     def test_exp0_exp1_via_jsonl(self, splits):
