@@ -13,11 +13,11 @@ For some learner corpora (e.g. ``UniversalCEFR/caes_es``) the essay track may
 yield suspiciously high accuracy (> 0.99) that mirrors or exceeds sentence-track
 numbers.  The root cause is within-document leakage: texts from the *same*
 learner/document may appear in both the training and the test split, so a
-TF-IDF model can reach near-perfect accuracy by memorising learner-specific
+TF-IDF model can reach near-perfect accuracy by memorizing learner-specific
 vocabulary patterns.  The proper fix is to perform *document-level* splitting
 (all texts from the same source document go into the same split), which requires
 per-document metadata from the dataset.  Until such splitting is implemented,
-essay-track accuracy on these corpora should be treated with scepticism.
+essay-track accuracy on these corpora should be treated with skepticism.
 """
 
 from __future__ import annotations
