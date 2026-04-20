@@ -1,0 +1,11 @@
+{
+  "run_id": "24659082090",
+  "run_number": "9",
+  "task": "sentence",
+  "exps": "0 1 5 7",
+  "dataset": "UniversalCEFR/cefr_sp_ru",
+  "triggered_by": "huynhduc0",
+  "ref": "refs/heads/codex/check-vkr-tests-for-cefr-classification-y3pd11",
+  "sha": "7e8be271518ffb9e5a62f9426a0919b5f69d999c",
+  "timestamp": "2026-04-20T09:31:25Z"
+}

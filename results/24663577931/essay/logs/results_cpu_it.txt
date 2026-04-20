@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "/opt/hostedtoolcache/Python/3.10.20/x64/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/opt/hostedtoolcache/Python/3.10.20/x64/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/runner/work/itmo-vkr-cefr/itmo-vkr-cefr/src/run_experiments.py", line 1165, in <module>
+    main()
+  File "/home/runner/work/itmo-vkr-cefr/itmo-vkr-cefr/src/run_experiments.py", line 1008, in main
+    r = run_exp1(train_texts, train_labels, test_texts, test_labels, track=args.task)
+  File "/home/runner/work/itmo-vkr-cefr/itmo-vkr-cefr/src/run_experiments.py", line 190, in run_exp1
+    pipeline = train_baseline(train_texts, train_labels)
+  File "/home/runner/work/itmo-vkr-cefr/itmo-vkr-cefr/src/baseline_tfidf.py", line 67, in train_baseline
+    pipeline.fit(train_texts, train_labels)
+  File "/opt/hostedtoolcache/Python/3.10.20/x64/lib/python3.10/site-packages/sklearn/base.py", line 1365, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/opt/hostedtoolcache/Python/3.10.20/x64/lib/python3.10/site-packages/sklearn/pipeline.py", line 663, in fit
+    self._final_estimator.fit(Xt, y, **last_step_params["fit"])
+  File "/opt/hostedtoolcache/Python/3.10.20/x64/lib/python3.10/site-packages/sklearn/base.py", line 1365, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/opt/hostedtoolcache/Python/3.10.20/x64/lib/python3.10/site-packages/sklearn/linear_model/_logistic.py", line 1335, in fit
+    raise ValueError(
+ValueError: This solver needs samples of at least 2 classes in the data, but the data contains only one class: np.int64(2)
+Loading splits from JSONL: data/it/essay/
+Train: 279, Val: 35, Test: 35
+
+--- Exp 0: Majority baseline ---
+  Majority class: majority=B1, Accuracy: 1.0000
+
+--- Exp 1: TF-IDF + LR ---

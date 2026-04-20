@@ -165,7 +165,8 @@ Visualization được cập nhật tự động từ multilingual runs mới nh
   - [QWK Heatmap](visuals/generated/sentence/qwk_heatmap.svg)
   - [Best QWK by Language](visuals/generated/sentence/best_qwk_by_language.svg)
 - `essay`:
-  - chưa có visualization được commit
+  - [QWK Heatmap](visuals/generated/essay/qwk_heatmap.svg)
+  - [Best QWK by Language](visuals/generated/essay/best_qwk_by_language.svg)
 
 ### Badges
 
@@ -175,7 +176,7 @@ Visualization được cập nhật tự động từ multilingual runs mới nh
 
 ### Sentence
 
-Run mới nhất: [`results/24662749764/sentence`](results/24662749764/sentence)
+Run mới nhất: [`results/24663346552/sentence`](results/24663346552/sentence)
 
 | Language | Best experiment by QWK | QWK | Accuracy | Note |
 |----------|-------------------------|-----|----------|------|

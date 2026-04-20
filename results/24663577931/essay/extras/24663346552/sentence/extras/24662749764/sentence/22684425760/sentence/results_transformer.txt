@@ -1,0 +1,26 @@
+Loading splits from JSONL: data//sentence/
+Train: 8002, Val: 1000, Test: 1001
+
+--- Exp 2: Transformer (RoBERTa) ---
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]Loading weights: 100%|██████████| 197/197 [00:00<00:00, 7062.63it/s]
+[1mRobertaForSequenceClassification LOAD REPORT[0m from: roberta-base
+Key                             | Status     | 
+--------------------------------+------------+-
+roberta.embeddings.position_ids | UNEXPECTED | 
+lm_head.layer_norm.bias         | UNEXPECTED | 
+lm_head.layer_norm.weight       | UNEXPECTED | 
+lm_head.dense.bias              | UNEXPECTED | 
+lm_head.dense.weight            | UNEXPECTED | 
+lm_head.bias                    | UNEXPECTED | 
+classifier.out_proj.weight      | MISSING    | 
+classifier.dense.bias           | MISSING    | 
+classifier.out_proj.bias        | MISSING    | 
+classifier.dense.weight         | MISSING    | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING[3m	:those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.[0m
+warmup_ratio is deprecated and will be removed in v5.2. Use `warmup_steps` instead.
+  0%|          | 0/1503 [00:00<?, ?it/s]/opt/hostedtoolcache/Python/3.10.19/x64/lib/python3.10/site-packages/torch/utils/data/dataloader.py:775: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  super().__init__(loader)
+  0%|          | 1/1503 [00:06<2:36:07,  6.24s/it]  0%|          | 2/1503 [00:11<2:18:45,  5.55s/it]  0%|          | 3/1503 [00:16<2:10:35,  5.22s/it]  0%|          | 4/1503 [00:21<2:07:02,  5.09s/it]  0%|          | 5/1503 [00:25<2:05:12,  5.01s/it]  0%|          | 6/1503 [00:30<2:04:05,  4.97s/it]  0%|          | 7/1503 [00:35<2:03:22,  4.95s/it]  1%|          | 8/1503 [00:40<2:02:54,  4.93s/it]  1%|          | 9/1503 [00:45<2:02:12,  4.91s/it]  1%|          | 10/1503 [00:50<2:01:49,  4.90s/it]  1%|          | 11/1503 [00:55<2:01:40,  4.89s/it]  1%|          | 12/1503 [01:00<2:01:31,  4.89s/it]  1%|          | 13/1503 [01:04<2:01:22,  4.89s/it]  1%|          | 14/1503 [01:09<2:01:00,  4.88s/it]  1%|          | 15/1503 [01:14<2:00:56,  4.88s/it]  1%|          | 16/1503 [01:19<2:00:40,  4.87s/it]  1%|          | 17/1503 [01:24<2:00:51,  4.88s/it]  1%|          | 18/1503 [01:29<2:00:39,  4.88s/it]  1%|▏         | 19/1503 [01:34<2:00:24,  4.87s/it]  1%|▏         | 20/1503 [01:39<2:00:25,  4.87s/it]  1%|▏         | 21/1503 [01:43<2:00:24,  4.88s/it]  1%|▏         | 22/1503 [01:48<2:00:31,  4.88s/it]  2%|▏         | 23/1503 [01:53<2:00:28,  4.88s/it]  2%|▏         | 24/1503 [01:58<2:00:26,  4.89s/it]  2%|▏         | 25/1503 [02:03<2:00:21,  4.89s/it]  2%|▏         | 26/1503 [02:08<2:00:09,  4.88s/it]  2%|▏         | 27/1503 [02:13<1:59:53,  4.87s/it]  2%|▏         | 28/1503 [02:18<1:59:35,  4.86s/it]  2%|▏         | 29/1503 [02:22<1:59:05,  4.85s/it]  2%|▏         | 30/1503 [02:27<1:58:58,  4.85s/it]  2%|▏         | 31/1503 [02:32<1:58:26,  4.83s/it]  2%|▏         | 32/1503 [02:37<1:58:23,  4.83s/it]  2%|▏         | 33/1503 [02:42<1:58:03,  4.82s/it]  2%|▏         | 34/1503 [02:46<1:57:59,  4.82s/it]  2%|▏         | 35/1503 [02:51<1:57:49,  4.82s/it]  2%|▏         | 36/1503 [02:56<1:57:39,  4.81s/it]  2%|▏         | 37/1503 [03:01<1:57:21,  4.80s/it]  3%|▎         | 38/1503 [03:06<1:57:15,  4.80s/it]  3%|▎         | 39/1503 [03:10<1:57:04,  4.80s/it]  3%|▎         | 40/1503 [03:15<1:57:21,  4.81s/it]  3%|▎         | 41/1503 [03:20<1:57:23,  4.82s/it]  3%|▎         | 42/1503 [03:25<1:57:15,  4.82s/it]  3%|▎         | 43/1503 [03:30<1:57:17,  4.82s/it]  3%|▎         | 44/1503 [03:35<1:57:36,  4.84s/it]  3%|▎         | 45/1503 [03:39<1:57:21,  4.83s/it]  3%|▎         | 46/1503 [03:44<1:57:00,  4.82s/it]  3%|▎         | 47/1503 [03:49<1:56:48,  4.81s/it]  3%|▎         | 48/1503 [03:54<1:56:54,  4.82s/it]  3%|▎         | 49/1503 [03:59<1:56:36,  4.81s/it]  3%|▎         | 50/1503 [04:03<1:56:13,  4.80s/it]                                                     3%|▎         | 50/1503 [04:03<1:56:13,  4.80s/it]  3%|▎         | 51/1503 [04:08<1:56:10,  4.80s/it]  3%|▎         | 52/1503 [04:13<1:55:59,  4.80s/it]  4%|▎         | 53/1503 [04:18<1:55:47,  4.79s/it]  4%|▎         | 54/1503 [04:23<1:55:42,  4.79s/it]  4%|▎         | 55/1503 [04:27<1:55:59,  4.81s/it]  4%|▎         | 56/1503 [04:32<1:55:45,  4.80s/it]  4%|▍         | 57/1503 [04:37<1:55:41,  4.80s/it]  4%|▍         | 58/1503 [04:42<1:56:46,  4.85s/it]  4%|▍         | 59/1503 [04:47<1:56:34,  4.84s/it]

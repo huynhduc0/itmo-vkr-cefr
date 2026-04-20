@@ -1,0 +1,7 @@
+name,track,accuracy,macro_f1,qwk,mae,latency_ms,note
+Exp 0 – Majority,sentence,0.254777,0.081218,0.0,1.738854,0.0001,majority=A1
+Exp 1 – TF-IDF+LR,sentence,0.458599,0.354476,0.63281,0.738854,0.4963,
+Exp 5 – Hybrid (mean_prob),sentence,0.44586,0.343541,0.604956,0.77707,2.3386,
+Exp 7 – TF-IDF+LinearSVC,sentence,0.433121,0.382553,0.663399,0.751592,0.1796,
+Exp 9 – Word TF-IDF+LR,sentence,0.414013,0.290411,0.457055,0.910828,0.078,
+Exp 10 – Ensemble (LR+CNB),sentence,0.44586,0.351661,0.644319,0.745223,0.3613,

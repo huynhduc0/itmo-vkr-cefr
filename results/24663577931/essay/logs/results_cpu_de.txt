@@ -1,0 +1,28 @@
+Loading splits from JSONL: data/de/essay/
+Train: 404, Val: 51, Test: 51
+
+--- Exp 0: Majority baseline ---
+  Majority class: majority=B2, Accuracy: 0.5686
+
+--- Exp 1: TF-IDF + LR ---
+
+--- Exp 5: Hybrid essay (sentence agg) ---
+
+--- Exp 7: TF-IDF + LinearSVC ---
+
+--- Exp 9: Word TF-IDF + LR ---
+
+--- Exp 10: Ensemble (LR + ComplementNB) ---
+
+---------------------------------------------------------------------------------------------------
+Experiment                                    Track         Acc     F1    QWK    MAE   Lat(ms) Note
+---------------------------------------------------------------------------------------------------
+Exp 0 – Majority                              essay      0.5686 0.3625 0.0000 0.4314     0.00ms  majority=B2
+Exp 1 – TF-IDF+LR                             essay      0.7647 0.7532 0.5096 0.2353     2.88ms  
+Exp 5 – Hybrid (mean_prob)                    essay      0.0000 0.0000 0.0693 2.0196     3.64ms  
+Exp 7 – TF-IDF+LinearSVC                      essay      0.8039 0.7976 0.5959 0.1961     1.56ms  
+Exp 9 – Word TF-IDF+LR                        essay      0.7647 0.7532 0.5096 0.2353     0.30ms  
+Exp 10 – Ensemble (LR+CNB)                    essay      0.0000 0.0000 0.0544 1.9020     2.55ms  
+---------------------------------------------------------------------------------------------------
+Results saved → results/de/results.json
+Results saved → results/de/results.csv

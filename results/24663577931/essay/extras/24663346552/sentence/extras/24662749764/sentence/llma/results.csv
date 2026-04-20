@@ -1,0 +1,2 @@
+name,track,accuracy,macro_f1,qwk,latency_ms,note
+Exp 4 – LLM+LoRA,sentence,0.011988,0.003949,0.0,880.516,1001/1001 valid
