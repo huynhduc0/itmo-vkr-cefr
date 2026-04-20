@@ -81,8 +81,11 @@ def load_dataset(
                 f"yet exist, supply a valid dataset path via --dataset <hf_path>.\n"
                 f"Original error: {exc}"
             ) from exc
-        raise
-
+        raise RuntimeError(
+            "Failed to download/load dataset from HuggingFace Hub. "
+            "Check network/proxy access (HTTPS to huggingface.co) and auth token if needed. "
+            f"dataset={dataset_name}, split={split}. Original error: {exc}"
+        ) from exc
     texts, labels = [], []
     for sample in dataset:
         text = sample.get(text_column, "")

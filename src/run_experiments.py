@@ -1,5 +1,5 @@
 """
-Unified experiment runner for CEFR level classification (Exp 0 – Exp 6).
+Unified experiment runner for CEFR level classification (Exp 0 – Exp 14).
 
 Runs the selected experiments and prints a comparison table of:
   Accuracy | Macro-F1 | QWK | Inference latency (s/sample)
@@ -64,7 +64,10 @@ def _load_splits_from_jsonl(
     Returns:
         ``(train, val, test)`` where each element is ``(texts, labels)``.
     """
-    from src.config import LABEL2ID
+    from src.config import ID2LABEL, LABEL2ID
+
+    if task not in {"sentence", "essay"}:
+        raise ValueError(f"task must be 'sentence' or 'essay', got: {task}")
 
     def _load(split_name: str):
         path = os.path.join(data_dir, task, f"{split_name}.jsonl")
@@ -74,8 +77,35 @@ def _load_splits_from_jsonl(
                 f"Run `python -m src.prepare_data --output {data_dir}` first."
             )
         records = load_jsonl(path)
-        texts = [r["text"] for r in records]
-        labels = [LABEL2ID[r["label"]] for r in records]
+        texts, labels = [], []
+        for i, r in enumerate(records):
+            if "text" not in r or "label" not in r:
+                raise KeyError(
+                    f"Invalid record at {path} line {i + 1}: expected keys 'text' and 'label'."
+                )
+
+            texts.append(r["text"])
+            raw_label = r["label"]
+
+            # Accept both normalized string labels (e.g., "B2") and integer ids (e.g., 3).
+            if isinstance(raw_label, str):
+                if raw_label not in LABEL2ID:
+                    raise ValueError(
+                        f"Unknown CEFR label at {path} line {i + 1}: {raw_label}. "
+                        f"Expected one of {sorted(LABEL2ID.keys())}."
+                    )
+                labels.append(LABEL2ID[raw_label])
+            elif isinstance(raw_label, int):
+                if raw_label not in ID2LABEL:
+                    raise ValueError(
+                        f"Unknown CEFR label id at {path} line {i + 1}: {raw_label}. "
+                        f"Expected one of {sorted(ID2LABEL.keys())}."
+                    )
+                labels.append(raw_label)
+            else:
+                raise TypeError(
+                    f"Unsupported label type at {path} line {i + 1}: {type(raw_label).__name__}."
+                )
         return texts, labels
 
     return _load("train"), _load("dev"), _load("test")
@@ -495,21 +525,23 @@ def run_exp10(
     test_labels: List[int],
     track: str,
 ) -> ExperimentResult:
+    from sklearn.base import clone
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
     from sklearn.naive_bayes import ComplementNB
     from sklearn.pipeline import FeatureUnion, Pipeline
 
-    word = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
-    char = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
-    union = FeatureUnion([("word", word), ("char", char)])
+    def _make_union():
+        word = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), sublinear_tf=True)
+        char = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
+        return FeatureUnion([("word", word), ("char", char)])
 
     lr_pipe = Pipeline([
-        ("features", union),
+        ("features", _make_union()),
         ("clf", LogisticRegression(max_iter=1000, solver="lbfgs")),
     ])
     nb_pipe = Pipeline([
-        ("features", union),
+        ("features", _make_union()),
         ("clf", ComplementNB(alpha=0.5)),
     ])
 
@@ -526,6 +558,177 @@ def run_exp10(
 
     metrics = compute_metrics(test_labels, preds.tolist())
     return ExperimentResult(name="Exp 10 – Ensemble (LR+CNB)", track=track, latency=latency, **metrics)
+
+
+# ---------------------------------------------------------------------------
+# Exp 11 – Transformer (DeBERTa-v3-base)
+# ---------------------------------------------------------------------------
+
+def run_exp11(
+    train_texts: List[str],
+    train_labels: List[int],
+    val_texts: List[str],
+    val_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+    num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
+    batch_size: int = TRANSFORMER_CONFIG["batch_size"],
+    seed: int = RANDOM_SEED,
+) -> ExperimentResult:
+    return run_exp2(
+        train_texts=train_texts,
+        train_labels=train_labels,
+        val_texts=val_texts,
+        val_labels=val_labels,
+        test_texts=test_texts,
+        test_labels=test_labels,
+        track=track,
+        model_name="microsoft/deberta-v3-base",
+        num_epochs=num_epochs,
+        batch_size=batch_size,
+        seed=seed,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exp 12 – Ordinal CORAL (DeBERTa-v3-base)
+# ---------------------------------------------------------------------------
+
+def run_exp12(
+    train_texts: List[str],
+    train_labels: List[int],
+    val_texts: List[str],
+    val_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+    num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
+    batch_size: int = TRANSFORMER_CONFIG["batch_size"],
+    seed: int = RANDOM_SEED,
+) -> ExperimentResult:
+    return run_exp3(
+        train_texts=train_texts,
+        train_labels=train_labels,
+        val_texts=val_texts,
+        val_labels=val_labels,
+        test_texts=test_texts,
+        test_labels=test_labels,
+        track=track,
+        model_name="microsoft/deberta-v3-base",
+        num_epochs=num_epochs,
+        batch_size=batch_size,
+        seed=seed,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exp 13 – Transformer + Ordinal late fusion
+# ---------------------------------------------------------------------------
+
+def run_exp13(
+    train_texts: List[str],
+    train_labels: List[int],
+    val_texts: List[str],
+    val_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+    num_epochs: int = TRANSFORMER_CONFIG["num_epochs"],
+    batch_size: int = TRANSFORMER_CONFIG["batch_size"],
+    seed: int = RANDOM_SEED,
+) -> ExperimentResult:
+    from src.ordinal_classifier import predict_ordinal, train_ordinal
+    from src.transformer_classifier import predict_transformer, train_transformer
+
+    max_length = (
+        TRANSFORMER_CONFIG["max_length_sentence"]
+        if track == "sentence"
+        else TRANSFORMER_CONFIG["max_length_essay"]
+    )
+
+    trainer_t, tok_t = train_transformer(
+        model_name=TRANSFORMER_CONFIG["sentence_model"] if track == "sentence" else TRANSFORMER_CONFIG["essay_model"],
+        train_texts=train_texts,
+        train_labels=train_labels,
+        val_texts=val_texts,
+        val_labels=val_labels,
+        max_length=max_length,
+        num_epochs=num_epochs,
+        batch_size=batch_size,
+        seed=seed,
+    )
+    model_t = trainer_t.model
+
+    model_o, tok_o = train_ordinal(
+        model_name=TRANSFORMER_CONFIG["sentence_model"],
+        train_texts=train_texts,
+        train_labels=train_labels,
+        val_texts=val_texts,
+        val_labels=val_labels,
+        max_length=max_length,
+        num_epochs=num_epochs,
+        batch_size=batch_size,
+        seed=seed,
+    )
+
+    start = time.perf_counter()
+    p_t = predict_transformer(model_t, tok_t, test_texts, max_length=max_length, batch_size=batch_size)
+    p_o = predict_ordinal(model_o, tok_o, test_texts, max_length=max_length, batch_size=batch_size)
+    # Tie-break: midpoint of ordered labels when two predictors disagree.
+    fused = np.where(p_t == p_o, p_t, np.rint((p_t + p_o) / 2.0).astype(int))
+    latency = (time.perf_counter() - start) / max(len(test_texts), 1)
+
+    metrics = compute_metrics(test_labels, fused.tolist())
+    return ExperimentResult(
+        name="Exp 13 – Transformer+Ordinal Fusion",
+        track=track,
+        latency=latency,
+        note="late-fusion (Exp2+Exp3)",
+        **metrics,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exp 14 – LLM + LoRA self-consistency (multi-seed averaging)
+# ---------------------------------------------------------------------------
+
+def run_exp14(
+    train_texts: List[str],
+    train_labels: List[int],
+    val_texts: List[str],
+    val_labels: List[int],
+    test_texts: List[str],
+    test_labels: List[int],
+    track: str,
+    seed: int = RANDOM_SEED,
+) -> ExperimentResult:
+    runs = []
+    latencies = []
+    for delta in [0, 1, 2]:
+        r = run_exp4(
+            train_texts=train_texts,
+            train_labels=train_labels,
+            val_texts=val_texts,
+            val_labels=val_labels,
+            test_texts=test_texts,
+            test_labels=test_labels,
+            track=track,
+            seed=seed + delta,
+        )
+        runs.append(r)
+        latencies.append(r.latency)
+
+    # Aggregate by metric averaging as a stable proxy of self-consistency.
+    return ExperimentResult(
+        name="Exp 14 – LLM+LoRA Self-Consistency",
+        track=track,
+        accuracy=float(np.mean([v.accuracy for v in runs])),
+        macro_f1=float(np.mean([v.macro_f1 for v in runs])),
+        qwk=float(np.mean([v.qwk for v in runs])),
+        latency=float(np.mean(latencies)),
+        note="mean over 3 seeds",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +771,7 @@ def parse_args():
         nargs="+",
         type=int,
         default=[0, 1],
-        help="Experiment ids to run (0–10)",
+        help="Experiment ids to run (0–14)",
     )
     parser.add_argument(
         "--dataset",
@@ -681,8 +884,8 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
-    # Load data (shared across Exp 0–5)
-    if any(e in args.exps for e in [0, 1, 2, 3, 4, 5, 7, 8, 9, 10]):
+    # Load data (shared across Exp 0–5 and Exp 7–14)
+    if any(e in args.exps for e in [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14]):
         if args.data_dir:
             print(f"Loading splits from JSONL: {args.data_dir}/{args.task}/")
             (train_texts, train_labels), (val_texts, val_labels), (test_texts, test_labels) = (
@@ -795,6 +998,56 @@ def main():
     if 10 in args.exps:
         print("\n--- Exp 10: Ensemble (LR + ComplementNB) ---")
         r = run_exp10(train_texts, train_labels, test_texts, test_labels, track=args.task)
+        results.append(r)
+
+    if 11 in args.exps:
+        print("\n--- Exp 11: Transformer (DeBERTa-v3-base) ---")
+        r = run_exp11(
+            train_texts, train_labels,
+            val_texts, val_labels,
+            test_texts, test_labels,
+            track=args.task,
+            num_epochs=args.epochs,
+            batch_size=args.batch_size,
+            seed=args.seed,
+        )
+        results.append(r)
+
+    if 12 in args.exps:
+        print("\n--- Exp 12: Ordinal CORAL (DeBERTa-v3-base) ---")
+        r = run_exp12(
+            train_texts, train_labels,
+            val_texts, val_labels,
+            test_texts, test_labels,
+            track=args.task,
+            num_epochs=args.epochs,
+            batch_size=args.batch_size,
+            seed=args.seed,
+        )
+        results.append(r)
+
+    if 13 in args.exps:
+        print("\n--- Exp 13: Transformer + Ordinal fusion ---")
+        r = run_exp13(
+            train_texts, train_labels,
+            val_texts, val_labels,
+            test_texts, test_labels,
+            track=args.task,
+            num_epochs=args.epochs,
+            batch_size=args.batch_size,
+            seed=args.seed,
+        )
+        results.append(r)
+
+    if 14 in args.exps:
+        print("\n--- Exp 14: LLM + LoRA self-consistency ---")
+        r = run_exp14(
+            train_texts, train_labels,
+            val_texts, val_labels,
+            test_texts, test_labels,
+            track=args.task,
+            seed=args.seed,
+        )
         results.append(r)
 
     print_comparison_table(results)

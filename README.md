@@ -16,7 +16,7 @@ src/prepare_data.py          ← Tải & chuẩn hoá dữ liệu, tạo splits 
         ▼  data/{sentence,essay}/{train,dev,test}.jsonl
         │
         ▼
-src/run_experiments.py       ← Chạy các thí nghiệm (Exp 0–10)
+src/run_experiments.py       ← Chạy các thí nghiệm (Exp 0–14)
         │
         ▼  results/{run_id}/{task}/results.json  &  results.csv
         │
@@ -41,6 +41,10 @@ results/ (được commit vào repo)   ← Kết quả được lưu vĩnh viễ
 | 8 | TF-IDF + Complement Naive Bayes | CPU |
 | 9 | Word-only TF-IDF + Logistic Regression | CPU |
 | 10 | Ensemble (LR + ComplementNB soft voting) | CPU |
+| 11 | DeBERTa-v3 fine-tune | GPU |
+| 12 | DeBERTa-v3 + Ordinal CORAL | GPU |
+| 13 | Transformer + Ordinal late fusion | GPU |
+| 14 | LLaMA + LoRA self-consistency (3 seeds) | GPU + `HF_TOKEN` |
 
 ---
 
@@ -114,7 +118,7 @@ Workflow `workflow_dispatch` để chạy toàn bộ pipeline với dữ liệu 
 | `task` | `sentence` | Track phân loại (`sentence` hoặc `essay`) |
 | `exps` | `0 1 5 7` | IDs thí nghiệm cách nhau bởi dấu cách |
 | `dataset` | `UniversalCEFR/cefr_sp_en` | Dataset trên HuggingFace |
-| `epochs` | `3` | Số epochs cho Exp 2–4 |
+| `epochs` | `3` | Số epochs cho Exp 2–4, 11–13 |
 
 #### Các giai đoạn của Full Pipeline
 
@@ -122,8 +126,8 @@ Workflow `workflow_dispatch` để chạy toàn bộ pipeline với dữ liệu 
 Stage 1 – lint-and-test         Unit tests (giống CI)
 Stage 2 – prepare-data          Tải dataset từ HuggingFace, sinh JSONL splits
 Stage 3 – run-cpu-experiments   Chạy Exp 0, 1, 5, 6, 7, 8, 9, 10 (CPU-only)
-Stage 4 – run-transformer-exp   Chạy Exp 2, 3 (yêu cầu GPU)
-Stage 5 – run-llm-experiment    Chạy Exp 4 LLaMA+LoRA (GPU + HF_TOKEN)
+Stage 4 – run-transformer-exp   Chạy Exp 2, 3, 11, 12, 13 (yêu cầu GPU)
+Stage 5 – run-llm-experiment    Chạy Exp 4, 14 (GPU + HF_TOKEN)
 Stage 6 – commit-results        ★ Commit kết quả vào repo
 ```
 
@@ -170,7 +174,7 @@ itmo-vkr-cefr/
 │   ├── config.py               ← Cấu hình toàn cục (CEFR labels, splits, ...)
 │   ├── data_utils.py           ← Tiện ích xử lý dữ liệu
 │   ├── prepare_data.py         ← Script chuẩn bị dữ liệu
-│   ├── run_experiments.py      ← Unified experiment runner (Exp 0–10)
+│   ├── run_experiments.py      ← Unified experiment runner (Exp 0–14)
 │   ├── evaluate.py             ← Tính metrics (accuracy, F1, QWK)
 │   ├── majority_baseline.py    ← Exp 0: Majority baseline
 │   ├── baseline_tfidf.py       ← Exp 1: TF-IDF baseline

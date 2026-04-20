@@ -32,14 +32,23 @@ def test_full_pipeline_has_manual_trigger_and_cpu_experiment_filter():
     content = _read(".github/workflows/full_pipeline.yml")
 
     assert "workflow_dispatch:" in content
-    assert "contains(inputs.exps, '0')" in content
-    assert "contains(inputs.exps, '1')" in content
-    assert "contains(inputs.exps, '5')" in content
-    assert "contains(inputs.exps, '6')" in content
-    assert "contains(inputs.exps, '7')" in content
-    assert "contains(inputs.exps, '8')" in content
-    assert "contains(inputs.exps, '9')" in content
-    assert "contains(inputs.exps, '10')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 0 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 1 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 5 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 6 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 7 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 8 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 9 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 10 ')" in content
+
+
+def test_full_pipeline_has_gpu_filters_for_exp11_to_exp14():
+    content = _read(".github/workflows/full_pipeline.yml")
+
+    assert "contains(format(' {0} ', inputs.exps), ' 11 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 12 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 13 ')" in content
+    assert "contains(format(' {0} ', inputs.exps), ' 14 ')" in content
 
 
 def test_full_pipeline_validates_ru_preset_requires_dataset():

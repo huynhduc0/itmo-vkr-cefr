@@ -15,6 +15,7 @@ from src.data_utils import (
     filter_by_length,
     filter_min_class_size,
     get_label_distribution,
+    load_dataset,
     load_jsonl,
     normalize_label,
     normalize_text,
@@ -127,6 +128,17 @@ class TestSetSeed:
     def test_set_seed_runs(self):
         set_seed(42)
         set_seed(0)
+
+
+class TestLoadDataset:
+    def test_hf_failure_raises_clear_runtime_error(self, monkeypatch):
+        def _boom(*args, **kwargs):
+            raise Exception("403 Forbidden")
+
+        monkeypatch.setattr("datasets.load_dataset", _boom)
+
+        with pytest.raises(RuntimeError, match="Failed to download/load dataset"):
+            load_dataset(dataset_name="UniversalCEFR/cefr_sp_en")
 
 
 class TestRemoveDuplicates:
