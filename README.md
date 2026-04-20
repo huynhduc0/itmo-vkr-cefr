@@ -160,19 +160,20 @@ results/
 
 Visualization được cập nhật tự động từ multilingual runs mới nhất của pipeline.
 
-### Visuals
-- `sentence`:
-  - [QWK Heatmap](visuals/generated/sentence/qwk_heatmap.svg)
-  - [Best QWK by Language](visuals/generated/sentence/best_qwk_by_language.svg)
-- `essay`:
-  - [QWK Heatmap](visuals/generated/essay/qwk_heatmap.svg)
-  - [Best QWK by Language](visuals/generated/essay/best_qwk_by_language.svg)
+### Sentence track – visuals
+![QWK Heatmap – sentence](visuals/generated/sentence/qwk_heatmap.svg)
+![Best QWK by Language – sentence](visuals/generated/sentence/best_qwk_by_language.svg)
+
+### Essay track – visuals
+![QWK Heatmap – essay](visuals/generated/essay/qwk_heatmap.svg)
+![Best QWK by Language – essay](visuals/generated/essay/best_qwk_by_language.svg)
 
 ### Badges
 
 ![Sentence Best QWK](visuals/generated/sentence/badges/best-qwk.svg)
 ![Sentence Best Macro-F1](visuals/generated/sentence/badges/best-macro-f1.svg)
 ![Sentence Languages](visuals/generated/sentence/badges/languages.svg)
+
 
 ### Sentence
 
@@ -191,7 +192,24 @@ Inputs: `task=sentence`, `exps=0 1 5 7 9 10`, `language=all`
 
 ### Essay
 
-Chưa có multilingual run nào được commit cho task này.
+Run mới nhất: [`results/24663577931/essay`](results/24663577931/essay)
+
+| Language | Best experiment by QWK | QWK | Accuracy | Note |
+|----------|-------------------------|-----|----------|------|
+| `en` | `N/A` | `N/A` | `N/A` | no committed results for this language |
+| `ru` | `N/A` | `N/A` | `N/A` | no committed results for this language |
+| `it` | `N/A` | `N/A` | `N/A` | no committed results for this language |
+| `es` | `Exp 1` | `0.9873` | `0.9948` | - |
+| `de` | `Exp 7` | `0.5959` | `0.8039` | - |
+| `fr` | `N/A` | `N/A` | `N/A` | no committed results for this language |
+
+Inputs: `task=essay`, `exps=0 1 5 7 9 10`, `language=all`
+
+---
+
+### Best results across all runs
+
+Kết quả tốt nhất trên mọi run đã commit, xem chi tiết tại [`best_results/`](best_results/README.md).
 <!-- AUTO-RESULTS-END -->
 
 #### GitHub Actions artifacts (tạm thời)

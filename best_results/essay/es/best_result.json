@@ -1,0 +1,14 @@
+{
+  "name": "Exp 1 – TF-IDF+LR",
+  "track": "essay",
+  "accuracy": 0.994774,
+  "macro_f1": 0.994099,
+  "qwk": 0.987272,
+  "mae": 0.012195,
+  "latency_ms": 1.0916,
+  "note": "",
+  "run_id": "24663577931",
+  "run_number": "15",
+  "task": "essay",
+  "language": "es"
+}

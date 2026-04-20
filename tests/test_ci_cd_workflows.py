@@ -87,4 +87,4 @@ def test_full_pipeline_generates_visualizations_and_preserves_language_results()
     assert "python -m src.update_readme_results" in content
     assert '--visuals_dir "visuals/generated/${{ inputs.task }}"' in content
     assert 'RUNDIR="results/${{ github.run_id }}/${{ inputs.task }}"' in content
-    assert "git add results/ visuals/generated/ README.md" in content
+    assert "git add results/ visuals/generated/ best_results/ README.md" in content

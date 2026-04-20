@@ -1,0 +1,14 @@
+{
+  "name": "Exp 7 – TF-IDF+LinearSVC",
+  "track": "sentence",
+  "accuracy": 0.433121,
+  "macro_f1": 0.382553,
+  "qwk": 0.663399,
+  "mae": 0.751592,
+  "latency_ms": 0.1694,
+  "note": "",
+  "run_id": "24662749764",
+  "run_number": "13",
+  "task": "sentence",
+  "language": "ru"
+}
