@@ -1,0 +1,13 @@
+{
+  "run_id": "24661974468",
+  "run_number": "12",
+  "task": "sentence",
+  "exps": "0 1 5 7 8 9 10",
+  "language": "all",
+  "dataset": "",
+  "combined_manifest": "",
+  "triggered_by": "huynhduc0",
+  "ref": "refs/heads/main",
+  "sha": "830bb67e116d54e8702ed53c72ba70ee173e8817",
+  "timestamp": "2026-04-20T10:42:43Z"
+}

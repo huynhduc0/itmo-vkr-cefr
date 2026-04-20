@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Exp 4 – LLM+LoRA",
+    "track": "sentence",
+    "accuracy": 0.011988,
+    "macro_f1": 0.003949,
+    "qwk": 0.0,
+    "latency_ms": 880.516,
+    "note": "1001/1001 valid"
+  }
+]
