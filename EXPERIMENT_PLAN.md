@@ -90,6 +90,44 @@ The same label space is used in all experiments.
 - **Method**: Train on one UniversalCEFR English subcorpus and evaluate on another one.
 - **Purpose**: evaluate cross-corpus robustness.
 
+### Exp 7 — TF-IDF + Linear SVM
+- **Features**: word n-grams (1–2), character n-grams (3–5).
+- **Classifier**: LinearSVC.
+- **Purpose**: margin-based classical baseline for sparse text features.
+
+### Exp 8 — TF-IDF + Complement Naive Bayes
+- **Features**: word n-grams (1–2), character n-grams (3–5).
+- **Classifier**: ComplementNB.
+- **Purpose**: fast probabilistic baseline, often strong on imbalanced text classes.
+
+### Exp 9 — Word-only TF-IDF + Logistic Regression
+- **Features**: word n-grams only (1–2), no character features.
+- **Classifier**: Logistic Regression.
+- **Purpose**: ablation against Exp 1 to measure impact of char n-grams.
+
+### Exp 10 — Ensemble (LR + ComplementNB)
+- **Method**: train Exp 1-style LR and Exp 8-style ComplementNB, then average probabilities.
+- **Purpose**: lightweight CPU ensemble to improve robustness.
+
+### Exp 11 — DeBERTa-v3 transformer baseline
+- **Model**: `microsoft/deberta-v3-base`
+- **Training**: full fine-tuning (same protocol as Exp 2).
+- **Purpose**: stronger encoder baseline than RoBERTa for CEFR classification.
+
+### Exp 12 — DeBERTa-v3 ordinal classification
+- **Model**: `microsoft/deberta-v3-base`
+- **Method**: CORAL ordinal head (same idea as Exp 3).
+- **Purpose**: combine stronger backbone with explicit CEFR ordering.
+
+### Exp 13 — Transformer + ordinal late fusion
+- **Method**: train Exp 2 and Exp 3 style models, then fuse predictions with order-aware tie-break.
+- **Purpose**: improve robustness on adjacent CEFR levels using complementary decision boundaries.
+
+### Exp 14 — LLM + LoRA self-consistency
+- **Model**: `LLaMA-3.2-3B-Instruct` (QLoRA)
+- **Method**: run Exp 4 with multiple seeds and average metrics as a self-consistency estimate.
+- **Purpose**: reduce variance and evaluate stability of instruction-tuned LLM predictions.
+
 ## 6. Hyperparameter search
 
 For Exp 2–Exp 4:

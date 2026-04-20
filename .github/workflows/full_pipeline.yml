@@ -16,9 +16,9 @@ on:
       exps:
         description: >
           Space-separated experiment IDs to run.
-          CPU-safe: 0 1 5 6  |  Needs GPU: 2 3  |  Needs GPU + HF_TOKEN: 4
+          CPU-safe: 0 1 5 6 7 8 9 10  |  Needs GPU: 2 3 11 12 13  |  Needs GPU + HF_TOKEN: 4 14
         required: true
-        default: "0 1 5"
+        default: "0 1 5 7"
       dataset:
         description: "HuggingFace dataset for data preparation"
         required: false
@@ -97,7 +97,7 @@ jobs:
           retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6)
+# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6, 7, 8, 9, 10)
 # ─────────────────────────────────────────────────────────────────────────────
   run-cpu-experiments:
     name: Run CPU experiments
@@ -107,10 +107,14 @@ jobs:
       contents: read
     # Only runs when at least one CPU-safe experiment is requested.
     if: |
-      contains(inputs.exps, '0') ||
-      contains(inputs.exps, '1') ||
-      contains(inputs.exps, '5') ||
-      contains(inputs.exps, '6')
+      contains(format(' {0} ', inputs.exps), ' 0 ') ||
+      contains(format(' {0} ', inputs.exps), ' 1 ') ||
+      contains(format(' {0} ', inputs.exps), ' 5 ') ||
+      contains(format(' {0} ', inputs.exps), ' 6 ') ||
+      contains(format(' {0} ', inputs.exps), ' 7 ') ||
+      contains(format(' {0} ', inputs.exps), ' 8 ') ||
+      contains(format(' {0} ', inputs.exps), ' 9 ') ||
+      contains(format(' {0} ', inputs.exps), ' 10 ')
 
     steps:
       - uses: actions/checkout@v4
@@ -130,14 +134,14 @@ jobs:
           name: prepared-data
           path: data/
 
-      - name: Run CPU experiments (Exp 0, 1, 5 from JSONL)
+      - name: Run CPU experiments (Exp 0, 1, 5, 7, 8, 9, 10 from JSONL)
         # Exp 6 (domain transfer) loads directly from HuggingFace so it's
         # handled separately. Here we run Exp 0/1/5 from pre-prepared JSONL.
         run: |
-          # Filter requested experiments to CPU-safe ones (0, 1, 5)
+          # Filter requested experiments to CPU-safe ones from JSONL.
           CPU_EXPS=""
           for exp in ${{ inputs.exps }}; do
-            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" ]]; then
+            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" || "$exp" == "7" || "$exp" == "8" || "$exp" == "9" || "$exp" == "10" ]]; then
               CPU_EXPS="$CPU_EXPS $exp"
             fi
           done
@@ -149,11 +153,11 @@ jobs:
               --save_results results/ \
               2>&1 | tee results_cpu.txt
           else
-            echo "No CPU-safe experiments (0,1,5) requested – skipping."
+            echo "No JSONL CPU experiments (0,1,5,7,8,9,10) requested – skipping."
           fi
 
       - name: Run Exp 6 (domain transfer, if requested)
-        if: contains(inputs.exps, '6')
+        if: contains(format(' {0} ', inputs.exps), ' 6 ')
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -187,7 +191,12 @@ jobs:
     needs: prepare-data
     permissions:
       contents: read
-    if: contains(inputs.exps, '2') || contains(inputs.exps, '3')
+    if: |
+      contains(format(' {0} ', inputs.exps), ' 2 ') ||
+      contains(format(' {0} ', inputs.exps), ' 3 ') ||
+      contains(format(' {0} ', inputs.exps), ' 11 ') ||
+      contains(format(' {0} ', inputs.exps), ' 12 ') ||
+      contains(format(' {0} ', inputs.exps), ' 13 ')
 
     steps:
       - uses: actions/checkout@v4
@@ -213,7 +222,7 @@ jobs:
         run: |
           TRANS_EXPS=""
           for exp in ${{ inputs.exps }}; do
-            if [[ "$exp" == "2" || "$exp" == "3" ]]; then
+            if [[ "$exp" == "2" || "$exp" == "3" || "$exp" == "11" || "$exp" == "12" || "$exp" == "13" ]]; then
               TRANS_EXPS="$TRANS_EXPS $exp"
             fi
           done
@@ -245,7 +254,9 @@ jobs:
     needs: prepare-data
     permissions:
       contents: read
-    if: contains(inputs.exps, '4')
+    if: |
+      contains(format(' {0} ', inputs.exps), ' 4 ') ||
+      contains(format(' {0} ', inputs.exps), ' 14 ')
 
     steps:
       - uses: actions/checkout@v4
@@ -282,13 +293,19 @@ jobs:
           print('HuggingFace login successful.')
           "
 
-      - name: Run LLM+LoRA experiment
+      - name: Run LLM+LoRA experiment(s)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          LLM_EXPS=""
+          for exp in ${{ inputs.exps }}; do
+            if [[ "$exp" == "4" || "$exp" == "14" ]]; then
+              LLM_EXPS="$LLM_EXPS $exp"
+            fi
+          done
           python -m src.run_experiments \
             --task         "${{ inputs.task }}" \
-            --exps         4 \
+            --exps         $LLM_EXPS \
             --data_dir     data/ \
             --epochs       "${{ inputs.epochs }}" \
             --save_results results/ \
@@ -382,4 +399,3 @@ jobs:
             git push || (git pull --rebase origin "${GITHUB_REF_NAME}" && git push)
             echo "Results committed and pushed to ${{ github.ref }}."
           fi
-
