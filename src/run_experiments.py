@@ -28,6 +28,7 @@ import numpy as np
 
 from src.config import (
     DATASET_CONFIG,
+    DEFAULT_LANGUAGE_DATASETS,
     LANGUAGE_PRESETS,
     RANDOM_SEED,
     TRANSFORMER_CONFIG,
@@ -129,6 +130,7 @@ class ExperimentResult:
     accuracy: float = 0.0
     macro_f1: float = 0.0
     qwk: float = 0.0
+    mae: float = 0.0
     latency: float = 0.0
     note: str = ""
 
@@ -479,7 +481,64 @@ def run_exp8(
     test_texts: List[str],
     test_labels: List[int],
     track: str,
+    language: str = "en",
+    mode: str = "baseline",
+    source_dataset: Optional[str] = None,
+    seed: int = RANDOM_SEED,
 ) -> ExperimentResult:
+    if mode == "zero_shot":
+        source_dataset = source_dataset or DEFAULT_LANGUAGE_DATASETS["en"]
+        source_language = "en"
+        source_model = get_default_transformer_model(source_language, track)
+        source_max_length = (
+            TRANSFORMER_CONFIG["max_length_sentence"]
+            if track == "sentence"
+            else TRANSFORMER_CONFIG["max_length_essay"]
+        )
+
+        print(f"Loading zero-shot source corpus: {source_dataset}")
+        (src_train_t, src_train_l), (src_val_t, src_val_l), _ = load_and_split_dataset(
+            dataset_name=source_dataset,
+            text_column=DATASET_CONFIG["text_column"],
+            label_column=DATASET_CONFIG["label_column"],
+            seed=seed,
+            deduplicate=True,
+        )
+
+        from src.transformer_classifier import predict_transformer, train_transformer
+
+        trainer, tokenizer = train_transformer(
+            model_name=source_model,
+            train_texts=src_train_t,
+            train_labels=src_train_l,
+            val_texts=src_val_t,
+            val_labels=src_val_l,
+            max_length=source_max_length,
+            num_epochs=TRANSFORMER_CONFIG["num_epochs"],
+            batch_size=TRANSFORMER_CONFIG["batch_size"],
+            seed=seed,
+        )
+        model = trainer.model
+
+        def _pred(texts):
+            return predict_transformer(
+                model,
+                tokenizer,
+                texts,
+                max_length=source_max_length,
+                batch_size=TRANSFORMER_CONFIG["batch_size"],
+            )
+
+        preds, latency = _time_predict(_pred, test_texts)
+        metrics = compute_metrics(test_labels, preds.tolist())
+        return ExperimentResult(
+            name="Exp 8 – Zero-shot XLM-R",
+            track=track,
+            latency=latency,
+            note=f"train={source_dataset} (en) → eval={language}",
+            **metrics,
+        )
+
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.naive_bayes import ComplementNB
     from sklearn.pipeline import FeatureUnion, Pipeline
@@ -740,6 +799,7 @@ def run_exp14(
         accuracy=float(np.mean([v.accuracy for v in runs])),
         macro_f1=float(np.mean([v.macro_f1 for v in runs])),
         qwk=float(np.mean([v.qwk for v in runs])),
+        mae=float(np.mean([v.mae for v in runs])),
         latency=float(np.mean(latencies)),
         note="mean over 3 seeds",
     )
@@ -753,7 +813,7 @@ def print_comparison_table(results: List[ExperimentResult]) -> None:
     """Print a formatted comparison table of all experiment results."""
     header = (
         f"{'Experiment':<45} {'Track':<10} "
-        f"{'Acc':>6} {'F1':>6} {'QWK':>6} {'Lat(ms)':>9} {'Note'}"
+        f"{'Acc':>6} {'F1':>6} {'QWK':>6} {'MAE':>6} {'Lat(ms)':>9} {'Note'}"
     )
     sep = "-" * len(header)
     print(f"\n{sep}")
@@ -762,7 +822,7 @@ def print_comparison_table(results: List[ExperimentResult]) -> None:
     for r in results:
         print(
             f"{r.name:<45} {r.track:<10} "
-            f"{r.accuracy:>6.4f} {r.macro_f1:>6.4f} {r.qwk:>6.4f} "
+            f"{r.accuracy:>6.4f} {r.macro_f1:>6.4f} {r.qwk:>6.4f} {r.mae:>6.4f} "
             f"{r.latency * 1000:>8.2f}ms  {r.note}"
         )
     print(sep)
@@ -878,6 +938,7 @@ def save_results_to_files(results: List[ExperimentResult], output_dir: str) -> N
             "accuracy": round(r.accuracy, 6),
             "macro_f1": round(r.macro_f1, 6),
             "qwk": round(r.qwk, 6),
+            "mae": round(r.mae, 6),
             "latency_ms": round(r.latency * 1000, 4),
             "note": r.note,
         }
@@ -902,6 +963,7 @@ def save_results_to_files(results: List[ExperimentResult], output_dir: str) -> N
 
 def main():
     args = parse_args()
+    language = getattr(args, "language", "en")
     set_seed(args.seed)
 
     # Load data (shared across Exp 0–5 and Exp 7–14)
@@ -946,7 +1008,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -960,7 +1022,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -974,7 +1036,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             seed=args.seed,
         )
         results.append(r)
@@ -1009,8 +1071,17 @@ def main():
         results.append(r)
 
     if 8 in args.exps:
-        print("\n--- Exp 8: TF-IDF + ComplementNB ---")
-        r = run_exp8(train_texts, train_labels, test_texts, test_labels, track=args.task)
+        print("\n--- Exp 8: Zero-shot XLM-R ---")
+        r = run_exp8(
+            train_texts,
+            train_labels,
+            test_texts,
+            test_labels,
+            track=args.task,
+            language=language,
+            mode="zero_shot",
+            seed=args.seed,
+        )
         results.append(r)
 
     if 9 in args.exps:
@@ -1030,7 +1101,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -1044,7 +1115,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -1058,7 +1129,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             seed=args.seed,
@@ -1072,7 +1143,7 @@ def main():
             val_texts, val_labels,
             test_texts, test_labels,
             track=args.task,
-            language=args.language,
+            language=language,
             seed=args.seed,
         )
         results.append(r)

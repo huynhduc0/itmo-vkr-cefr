@@ -43,6 +43,12 @@ on:
           For language=all, leave empty.
         required: false
         default: ""
+      combined_manifest:
+        description: >
+          Optional JSON manifest in the repository for building a combined multilingual corpus.
+          When set, the workflow ignores language/dataset-based preparation and writes data/<lang>/...
+        required: false
+        default: ""
       epochs:
         description: "Training epochs (Exp 2-4 only)"
         required: false
@@ -103,6 +109,14 @@ jobs:
 
       - name: Validate language / dataset combination
         run: |
+          if [[ -n "${{ inputs.combined_manifest }}" && -n "${{ inputs.dataset }}" ]]; then
+            echo "::error::combined_manifest prepares datasets from the manifest, so dataset must be left empty."
+            exit 1
+          fi
+          if [[ -n "${{ inputs.combined_manifest }}" && " ${{ inputs.exps }} " == *" 6 "* ]]; then
+            echo "::error::Exp 6 is not supported with combined_manifest because it requires a single dataset/domain pair."
+            exit 1
+          fi
           if [[ "${{ inputs.language }}" == "all" && -n "${{ inputs.dataset }}" ]]; then
             echo "::error::language=all prepares multiple datasets, so dataset must be left empty."
             exit 1
@@ -116,7 +130,11 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          if [[ "${{ inputs.language }}" == "all" ]]; then
+          if [[ -n "${{ inputs.combined_manifest }}" ]]; then
+            python -m src.prepare_data \
+              --combined_manifest "${{ inputs.combined_manifest }}" \
+              --output data/
+          elif [[ "${{ inputs.language }}" == "all" ]]; then
             python -m src.prepare_data --language all --output data/
           else
             # Build the command: always pass --language; optionally override --dataset.
@@ -184,7 +202,7 @@ jobs:
             fi
           done
           if [[ -n "$CPU_EXPS" ]]; then
-            if [[ "${{ inputs.language }}" == "all" ]]; then
+            if [[ -n "${{ inputs.combined_manifest }}" || "${{ inputs.language }}" == "all" ]]; then
               for lang in en ru it es de fr; do
                 python -m src.run_experiments \
                   --language    "$lang" \
@@ -278,7 +296,7 @@ jobs:
               TRANS_EXPS="$TRANS_EXPS $exp"
             fi
           done
-          if [[ "${{ inputs.language }}" == "all" ]]; then
+          if [[ -n "${{ inputs.combined_manifest }}" || "${{ inputs.language }}" == "all" ]]; then
             for lang in en ru it es de fr; do
               python -m src.run_experiments \
                 --language     "$lang" \
@@ -369,7 +387,7 @@ jobs:
               LLM_EXPS="$LLM_EXPS $exp"
             fi
           done
-          if [[ "${{ inputs.language }}" == "all" ]]; then
+          if [[ -n "${{ inputs.combined_manifest }}" || "${{ inputs.language }}" == "all" ]]; then
             for lang in en ru it es de fr; do
               python -m src.run_experiments \
                 --language     "$lang" \
@@ -455,6 +473,7 @@ jobs:
             "exps": "${{ inputs.exps }}",
             "language": "${{ inputs.language }}",
             "dataset": "${{ inputs.dataset }}",
+            "combined_manifest": "${{ inputs.combined_manifest }}",
             "triggered_by": "${{ github.actor }}",
             "ref": "${{ github.ref }}",
             "sha": "${{ github.sha }}",

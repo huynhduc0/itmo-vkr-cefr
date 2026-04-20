@@ -10,6 +10,7 @@ from sklearn.metrics import (
     cohen_kappa_score,
     confusion_matrix,
     f1_score,
+    mean_absolute_error,
 )
 
 from src.config import CEFR_LEVELS, ID2LABEL, LABEL2ID
@@ -20,22 +21,29 @@ def compute_metrics(
     y_pred: List[int],
 ) -> Dict[str, float]:
     """
-    Compute accuracy, macro-F1, and quadratic weighted kappa.
+    Compute accuracy, macro-F1, quadratic weighted kappa, and MAE.
 
     Args:
         y_true: ground-truth label ids
         y_pred: predicted label ids
 
     Returns:
-        Dictionary with keys 'accuracy', 'macro_f1', 'qwk'.
+        Dictionary with keys 'accuracy', 'macro_f1', 'qwk', 'mae'.
     """
     accuracy = accuracy_score(y_true, y_pred)
     macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
-    qwk = cohen_kappa_score(y_true, y_pred, weights="quadratic")
+    if len(set(y_true) | set(y_pred)) < 2:
+        qwk = 0.0
+    else:
+        qwk = cohen_kappa_score(y_true, y_pred, weights="quadratic")
+        if np.isnan(qwk):
+            qwk = 0.0
+    mae = mean_absolute_error(y_true, y_pred)
     return {
         "accuracy": float(accuracy),
         "macro_f1": float(macro_f1),
         "qwk": float(qwk),
+        "mae": float(mae),
     }
 
 
@@ -107,6 +115,7 @@ def print_evaluation_report(
     print(f"  Accuracy  : {metrics['accuracy']:.4f}")
     print(f"  Macro-F1  : {metrics['macro_f1']:.4f}")
     print(f"  QWK       : {metrics['qwk']:.4f}")
+    print(f"  MAE       : {metrics['mae']:.4f}")
 
     print("\nConfusion Matrix (rows=true, cols=pred):")
     header = "      " + "  ".join(f"{l:>3}" for l in CEFR_LEVELS)

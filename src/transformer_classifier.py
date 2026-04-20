@@ -2,12 +2,12 @@
 Transformer encoder (RoBERTa / DeBERTa) fine-tuning for CEFR classification.
 """
 
-import os
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from src.config import ID2LABEL, LABEL2ID, RANDOM_SEED, TRANSFORMER_CONFIG
+from src.evaluate import compute_metrics
 
 
 class CEFRTransformerDataset:
@@ -79,7 +79,8 @@ def get_training_args(
         eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
+        metric_for_best_model="eval_qwk",
+        greater_is_better=True,
         seed=seed,
         logging_steps=50,
         fp16=False,
@@ -87,14 +88,10 @@ def get_training_args(
 
 
 def compute_transformer_metrics(eval_pred) -> Dict[str, float]:
-    """Compute accuracy and macro-F1 during transformer training."""
-    from sklearn.metrics import accuracy_score, f1_score
-
+    """Compute report-aligned metrics during transformer training."""
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-    accuracy = accuracy_score(labels, predictions)
-    macro_f1 = f1_score(labels, predictions, average="macro", zero_division=0)
-    return {"accuracy": accuracy, "macro_f1": macro_f1}
+    return compute_metrics(labels.tolist(), predictions.tolist())
 
 
 def train_transformer(

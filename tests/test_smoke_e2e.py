@@ -194,6 +194,7 @@ class TestComparisonTable:
         assert "Acc" in out
         assert "F1" in out
         assert "QWK" in out
+        assert "MAE" in out
 
     def test_all_results_have_valid_metrics(self, splits):
         (tr_t, tr_l), _, (te_t, te_l) = splits
@@ -207,6 +208,7 @@ class TestComparisonTable:
             assert 0.0 <= r.accuracy <= 1.0
             assert 0.0 <= r.macro_f1 <= 1.0
             assert -1.0 <= r.qwk <= 1.0
+            assert r.mae >= 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -335,12 +337,13 @@ class TestSaveResultsToFiles:
                 records = json.load(fh)
 
         assert len(records) == len(sample_results)
-        required_keys = {"name", "track", "accuracy", "macro_f1", "qwk", "latency_ms", "note"}
+        required_keys = {"name", "track", "accuracy", "macro_f1", "qwk", "mae", "latency_ms", "note"}
         for rec in records:
             assert required_keys == set(rec.keys())
             assert 0.0 <= rec["accuracy"] <= 1.0
             assert 0.0 <= rec["macro_f1"] <= 1.0
             assert -1.0 <= rec["qwk"] <= 1.0
+            assert rec["mae"] >= 0.0
             assert rec["latency_ms"] >= 0.0
 
     def test_csv_content(self, sample_results):

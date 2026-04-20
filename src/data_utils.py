@@ -18,6 +18,7 @@ from src.config import (
     ID2LABEL,
     LABEL2ID,
     RANDOM_SEED,
+    SUPPORTED_LANGUAGES,
     TEST_RATIO,
     TRAIN_RATIO,
     VAL_RATIO,
@@ -98,6 +99,38 @@ def load_dataset(
         texts.append(normalize_text(text))
         labels.append(LABEL2ID[label])
     return texts, labels
+
+
+def load_dataset_records(
+    dataset_name: str = DATASET_CONFIG["dataset_name"],
+    split: str = "train",
+) -> List[Dict[str, Any]]:
+    """
+    Load raw HuggingFace dataset records without CEFR/text preprocessing.
+
+    This is used by multilingual builders that need access to metadata such as
+    language columns before normalizing and filtering the examples.
+    """
+    from datasets import load_dataset as hf_load_dataset
+
+    try:
+        dataset = hf_load_dataset(dataset_name, split=split)
+    except Exception as exc:
+        exc_name = type(exc).__name__
+        if "DatasetNotFoundError" in exc_name or "not found" in str(exc).lower():
+            raise ValueError(
+                f"Dataset '{dataset_name}' was not found on the HuggingFace Hub "
+                f"or cannot be accessed.\n"
+                f"  • Check that the dataset path is correct.\n"
+                f"  • If the dataset is private, ensure HF_TOKEN is set.\n"
+                f"Original error: {exc}"
+            ) from exc
+        raise RuntimeError(
+            "Failed to download/load dataset from HuggingFace Hub. "
+            "Check network/proxy access (HTTPS to huggingface.co) and auth token if needed. "
+            f"dataset={dataset_name}, split={split}. Original error: {exc}"
+        ) from exc
+    return [dict(sample) for sample in dataset]
 
 
 def stratified_split(
@@ -236,6 +269,62 @@ def load_multiple_datasets(
         all_texts.extend(texts)
         all_labels.extend(labels)
     return all_texts, all_labels
+
+
+def detect_text_language(text: str) -> str:
+    """
+    Detect the language of *text* using ``langdetect``.
+
+    Raises:
+        ImportError: if langdetect is not installed.
+        ValueError: if language detection fails.
+    """
+    try:
+        from langdetect import DetectorFactory, LangDetectException, detect
+    except ImportError as exc:
+        raise ImportError(
+            "langdetect is required for automatic language detection. "
+            "Install it with `pip install langdetect`."
+        ) from exc
+
+    DetectorFactory.seed = RANDOM_SEED
+    try:
+        return detect(text).lower()
+    except LangDetectException as exc:
+        raise ValueError(f"Language detection failed for text: {text[:80]!r}") from exc
+
+
+def resolve_record_language(
+    record: Dict[str, Any],
+    dataset_language: Optional[str] = None,
+    language_keys: Tuple[str, ...] = ("lang", "language"),
+    use_langdetect: bool = False,
+) -> Optional[str]:
+    """
+    Resolve a language code for one dataset record.
+
+    Priority:
+    1. Explicit per-record metadata (`lang`, `language`, ...).
+    2. Dataset-level language hint.
+    3. Optional `langdetect` fallback.
+    """
+    for key in language_keys:
+        value = record.get(key)
+        if value is None:
+            continue
+        value = str(value).strip().lower()
+        if value:
+            return value
+
+    if dataset_language:
+        return dataset_language.lower()
+
+    if use_langdetect:
+        text = record.get("text")
+        if text and str(text).strip():
+            return detect_text_language(str(text))
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -415,6 +504,103 @@ def _split_to_records(
     ]
 
 
+def _prepare_tracks_from_arrays(
+    texts_raw: List[str],
+    labels: List[int],
+    tokenizer=None,
+    tokenizer_name: str = DATA_PREP_CONFIG["tokenizer"],
+    sentence_min_tokens: int = DATA_PREP_CONFIG["sentence_min_tokens"],
+    sentence_max_tokens: int = DATA_PREP_CONFIG["sentence_max_tokens"],
+    essay_min_tokens: int = DATA_PREP_CONFIG["essay_min_tokens"],
+    min_class_samples: int = DATA_PREP_CONFIG["min_class_samples"],
+    val_ratio: float = VAL_RATIO,
+    test_ratio: float = TEST_RATIO,
+    seed: int = RANDOM_SEED,
+    output_dir: Optional[str] = None,
+) -> Dict[str, Tuple]:
+    """Shared implementation for single-language and combined-corpus builders."""
+    from sklearn.model_selection import train_test_split
+
+    set_seed(seed)
+
+    if tokenizer is None:
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+    n_tokens_all = build_token_counts(texts_raw, tokenizer)
+
+    seen: set = set()
+    texts_clean, labels_clean, n_tokens_clean = [], [], []
+    for t, l, n in zip(texts_raw, labels, n_tokens_all):
+        key = (t, l)
+        if key not in seen:
+            seen.add(key)
+            texts_clean.append(t)
+            labels_clean.append(l)
+            n_tokens_clean.append(n)
+
+    def _prepare_track(
+        t_min: Optional[int],
+        t_max: Optional[int],
+    ) -> Tuple:
+        t_texts, t_labels, t_ntoks = filter_by_length(
+            texts_clean,
+            labels_clean,
+            n_tokens_clean,
+            min_tokens=t_min,
+            max_tokens=t_max,
+        )
+        t_texts, t_labels, t_ntoks = filter_min_class_size(
+            t_texts,
+            t_labels,
+            t_ntoks,
+            min_samples=min_class_samples,
+        )
+        if not t_texts:
+            empty: List = []
+            return (empty, empty, empty), (empty, empty, empty), (empty, empty, empty)
+
+        tr_t, tmp_t, tr_l, tmp_l, tr_n, tmp_n = train_test_split(
+            t_texts,
+            t_labels,
+            t_ntoks,
+            test_size=(val_ratio + test_ratio),
+            stratify=t_labels,
+            random_state=seed,
+        )
+        val_frac = val_ratio / (val_ratio + test_ratio)
+        va_t, te_t, va_l, te_l, va_n, te_n = train_test_split(
+            tmp_t,
+            tmp_l,
+            tmp_n,
+            test_size=(1.0 - val_frac),
+            stratify=tmp_l,
+            random_state=seed,
+        )
+        return (tr_t, tr_l, tr_n), (va_t, va_l, va_n), (te_t, te_l, te_n)
+
+    sentence_splits = _prepare_track(sentence_min_tokens, sentence_max_tokens)
+    essay_splits = _prepare_track(essay_min_tokens, None)
+
+    if output_dir is not None:
+        for track_name, splits in (
+            ("sentence", sentence_splits),
+            ("essay", essay_splits),
+        ):
+            track_dir = os.path.join(output_dir, track_name)
+            for split_name, (s_texts, s_labels, s_ntoks) in zip(
+                ("train", "dev", "test"),
+                splits,
+            ):
+                if not s_texts:
+                    continue
+                records = _split_to_records(s_texts, s_labels, s_ntoks)
+                save_jsonl(records, os.path.join(track_dir, f"{split_name}.jsonl"))
+
+    return {"sentence": sentence_splits, "essay": essay_splits}
+
+
 # ---------------------------------------------------------------------------
 # High-level track preparation (DATA_PREP.md §5–9)
 # ---------------------------------------------------------------------------
@@ -470,86 +656,107 @@ def load_and_prepare_tracks(
               (test_texts,  test_labels,  test_n_tokens),
             )
     """
-    from sklearn.model_selection import train_test_split
-
-    set_seed(seed)
-
-    # ---- load raw data -------------------------------------------------------
     texts_raw, labels = load_dataset(
         dataset_name=dataset_name,
         text_column=text_column,
         label_column=label_column,
     )
+    return _prepare_tracks_from_arrays(
+        texts_raw=texts_raw,
+        labels=labels,
+        tokenizer=tokenizer,
+        tokenizer_name=tokenizer_name,
+        sentence_min_tokens=sentence_min_tokens,
+        sentence_max_tokens=sentence_max_tokens,
+        essay_min_tokens=essay_min_tokens,
+        min_class_samples=min_class_samples,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
+        seed=seed,
+        output_dir=output_dir,
+    )
 
-    # ---- tokenise ------------------------------------------------------------
-    if tokenizer is None:
-        from transformers import AutoTokenizer
 
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+def load_and_prepare_multilingual_tracks(
+    dataset_specs: List[Dict[str, Any]],
+    text_column: str = DATASET_CONFIG["text_column"],
+    label_column: str = DATASET_CONFIG["label_column"],
+    tokenizer=None,
+    tokenizer_name: str = DATA_PREP_CONFIG["tokenizer"],
+    sentence_min_tokens: int = DATA_PREP_CONFIG["sentence_min_tokens"],
+    sentence_max_tokens: int = DATA_PREP_CONFIG["sentence_max_tokens"],
+    essay_min_tokens: int = DATA_PREP_CONFIG["essay_min_tokens"],
+    min_class_samples: int = DATA_PREP_CONFIG["min_class_samples"],
+    val_ratio: float = VAL_RATIO,
+    test_ratio: float = TEST_RATIO,
+    seed: int = RANDOM_SEED,
+    output_dir: Optional[str] = None,
+    use_langdetect: bool = False,
+    language_keys: Tuple[str, ...] = ("lang", "language"),
+    allowed_languages: Tuple[str, ...] = SUPPORTED_LANGUAGES,
+) -> Dict[str, Dict[str, Tuple]]:
+    """
+    Build per-language sentence/essay splits from a combined multilingual corpus.
 
-    n_tokens_all = build_token_counts(texts_raw, tokenizer)
+    Each item in ``dataset_specs`` must contain at least ``dataset_name`` and may
+    optionally contain:
+    * ``text_column``
+    * ``label_column``
+    * ``language``   – dataset-level language hint
+    * ``split``      – defaults to ``train``
+    """
+    set_seed(seed)
 
-    # ---- deduplicate ---------------------------------------------------------
-    # Dedup on (text, label) before any length filtering so that duplicates
-    # that land in different tracks are also eliminated.
-    seen: set = set()
-    texts_clean, labels_clean, n_tokens_clean = [], [], []
-    for t, l, n in zip(texts_raw, labels, n_tokens_all):
-        key = (t, l)
-        if key not in seen:
-            seen.add(key)
-            texts_clean.append(t)
-            labels_clean.append(l)
-            n_tokens_clean.append(n)
+    per_language: Dict[str, Dict[str, List[Any]]] = {
+        lang: {"texts": [], "labels": []}
+        for lang in allowed_languages
+    }
 
-    # ---- build tracks --------------------------------------------------------
-    def _prepare_track(
-        t_min: Optional[int],
-        t_max: Optional[int],
-    ) -> Tuple:
-        t_texts, t_labels, t_ntoks = filter_by_length(
-            texts_clean, labels_clean, n_tokens_clean,
-            min_tokens=t_min, max_tokens=t_max,
+    for spec in dataset_specs:
+        dataset_name = spec["dataset_name"]
+        split = spec.get("split", "train")
+        spec_text_column = spec.get("text_column", text_column)
+        spec_label_column = spec.get("label_column", label_column)
+        dataset_language = spec.get("language")
+
+        for record in load_dataset_records(dataset_name=dataset_name, split=split):
+            text = record.get(spec_text_column, "")
+            raw_label = record.get(spec_label_column)
+            if not text or not str(text).strip():
+                continue
+
+            label = normalize_label(raw_label)
+            if label is None:
+                continue
+
+            resolved_language = resolve_record_language(
+                record,
+                dataset_language=dataset_language,
+                language_keys=language_keys,
+                use_langdetect=use_langdetect,
+            )
+            if resolved_language not in per_language:
+                continue
+
+            per_language[resolved_language]["texts"].append(normalize_text(str(text)))
+            per_language[resolved_language]["labels"].append(LABEL2ID[label])
+
+    multilingual_tracks: Dict[str, Dict[str, Tuple]] = {}
+    for language, payload in per_language.items():
+        lang_output = os.path.join(output_dir, language) if output_dir else None
+        multilingual_tracks[language] = _prepare_tracks_from_arrays(
+            texts_raw=payload["texts"],
+            labels=payload["labels"],
+            tokenizer=tokenizer,
+            tokenizer_name=tokenizer_name,
+            sentence_min_tokens=sentence_min_tokens,
+            sentence_max_tokens=sentence_max_tokens,
+            essay_min_tokens=essay_min_tokens,
+            min_class_samples=min_class_samples,
+            val_ratio=val_ratio,
+            test_ratio=test_ratio,
+            seed=seed,
+            output_dir=lang_output,
         )
-        t_texts, t_labels, t_ntoks = filter_min_class_size(
-            t_texts, t_labels, t_ntoks, min_samples=min_class_samples,
-        )
-        if not t_texts:
-            empty: List = []
-            return (empty, empty, empty), (empty, empty, empty), (empty, empty, empty)
 
-        # stratified split on texts + labels; carry n_tokens alongside
-        tr_t, tmp_t, tr_l, tmp_l, tr_n, tmp_n = train_test_split(
-            t_texts, t_labels, t_ntoks,
-            test_size=(val_ratio + test_ratio),
-            stratify=t_labels,
-            random_state=seed,
-        )
-        val_frac = val_ratio / (val_ratio + test_ratio)
-        va_t, te_t, va_l, te_l, va_n, te_n = train_test_split(
-            tmp_t, tmp_l, tmp_n,
-            test_size=(1.0 - val_frac),
-            stratify=tmp_l,
-            random_state=seed,
-        )
-        return (tr_t, tr_l, tr_n), (va_t, va_l, va_n), (te_t, te_l, te_n)
-
-    sentence_splits = _prepare_track(sentence_min_tokens, sentence_max_tokens)
-    essay_splits = _prepare_track(essay_min_tokens, None)
-
-    # ---- optional JSONL output -----------------------------------------------
-    if output_dir is not None:
-        for track_name, splits in (
-            ("sentence", sentence_splits),
-            ("essay", essay_splits),
-        ):
-            track_dir = os.path.join(output_dir, track_name)
-            for split_name, (s_texts, s_labels, s_ntoks) in zip(
-                ("train", "dev", "test"), splits
-            ):
-                if not s_texts:
-                    continue
-                records = _split_to_records(s_texts, s_labels, s_ntoks)
-                save_jsonl(records, os.path.join(track_dir, f"{split_name}.jsonl"))
-
-    return {"sentence": sentence_splits, "essay": essay_splits}
+    return multilingual_tracks

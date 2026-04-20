@@ -47,6 +47,7 @@ Each JSONL line:
 """
 
 import argparse
+import json
 import os
 
 from src.config import (
@@ -60,6 +61,7 @@ from src.config import (
 )
 from src.data_utils import (
     get_label_distribution,
+    load_and_prepare_multilingual_tracks,
     load_and_prepare_tracks,
     set_seed,
 )
@@ -83,6 +85,15 @@ def parse_args():
         "--dataset",
         default=None,
         help="HuggingFace dataset name (default: from --language preset or DATASET_CONFIG)",
+    )
+    parser.add_argument(
+        "--combined_manifest",
+        default=None,
+        help=(
+            "Path to a JSON manifest describing a combined multilingual corpus. "
+            "Each item must include at least {'dataset_name': ...} and may also "
+            "set language/text_column/label_column/split."
+        ),
     )
     parser.add_argument(
         "--text_column",
@@ -134,8 +145,19 @@ def parse_args():
         default=RANDOM_SEED,
         help="Random seed (default: %(default)s)",
     )
+    parser.add_argument(
+        "--use_langdetect",
+        action="store_true",
+        help="Use langdetect when a combined-corpus record has no language metadata.",
+    )
 
     args = parser.parse_args()
+
+    if args.combined_manifest is not None:
+        if args.language is not None:
+            parser.error("--combined_manifest cannot be used together with --language.")
+        if args.dataset is not None:
+            parser.error("--combined_manifest cannot be used together with --dataset.")
 
     if args.language == "all" and args.dataset is not None:
         parser.error(
@@ -203,6 +225,41 @@ def _print_track_summary(
 def main():
     args = parse_args()
     set_seed(args.seed)
+
+    if args.combined_manifest is not None:
+        with open(args.combined_manifest, "r", encoding="utf-8") as fh:
+            dataset_specs = json.load(fh)
+        if not isinstance(dataset_specs, list):
+            raise ValueError("--combined_manifest must point to a JSON list of dataset specs.")
+
+        print(f"Combined manifest : {args.combined_manifest}")
+        print(f"Datasets          : {len(dataset_specs)}")
+        print(f"Tokenizer         : {args.tokenizer or DATA_PREP_CONFIG['tokenizer']}")
+        print(f"Use langdetect    : {args.use_langdetect}")
+        print(f"Output dir        : {args.output}")
+        print(f"Seed              : {args.seed}")
+
+        tracks_by_language = load_and_prepare_multilingual_tracks(
+            dataset_specs=dataset_specs,
+            text_column=args.text_column or DATASET_CONFIG["text_column"],
+            label_column=args.label_column or DATASET_CONFIG["label_column"],
+            tokenizer_name=args.tokenizer or DATA_PREP_CONFIG["tokenizer"],
+            sentence_min_tokens=args.sent_min,
+            sentence_max_tokens=args.sent_max,
+            essay_min_tokens=args.essay_min,
+            min_class_samples=args.min_class,
+            seed=args.seed,
+            output_dir=args.output,
+            use_langdetect=args.use_langdetect,
+        )
+
+        for language, tracks in tracks_by_language.items():
+            print(f"\n=== Combined language: {language} ===")
+            for track_name, splits in tracks.items():
+                _print_track_summary(track_name, splits)
+
+        print(f"\nJSONL files written to: {os.path.abspath(args.output)}")
+        return
 
     if args.language == "all":
         print(f"Languages  : {', '.join(SUPPORTED_LANGUAGES)}")

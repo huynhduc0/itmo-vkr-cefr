@@ -2,6 +2,8 @@
 
 from argparse import Namespace
 
+import numpy as np
+
 import src.run_experiments as rexp
 
 
@@ -104,3 +106,45 @@ def test_main_dispatches_exp11_to_exp14(monkeypatch):
     rexp.main()
 
     assert all(called.values())
+
+
+def test_run_exp8_zero_shot_uses_english_source(monkeypatch):
+    monkeypatch.setattr(
+        rexp,
+        "load_and_split_dataset",
+        lambda **kwargs: ((["en-tr"], [0]), (["en-val"], [0]), (["en-te"], [0])),
+    )
+
+    class _Trainer:
+        model = object()
+
+    monkeypatch.setattr(
+        "src.transformer_classifier.train_transformer",
+        lambda **kwargs: (_Trainer(), "tok"),
+    )
+    monkeypatch.setattr(
+        "src.transformer_classifier.predict_transformer",
+        lambda model, tokenizer, texts, **kwargs: np.array([0 for _ in texts]),
+    )
+
+    result = rexp.run_exp8(
+        train_texts=[],
+        train_labels=[],
+        test_texts=["ru-sample"],
+        test_labels=[0],
+        track="sentence",
+        language="ru",
+        mode="zero_shot",
+        seed=7,
+    )
+
+    assert result.name.startswith("Exp 8")
+    assert "train=UniversalCEFR/cefr_sp_en" in result.note
+    assert "eval=ru" in result.note
+
+
+def test_transformer_training_selects_best_checkpoint_by_qwk():
+    from pathlib import Path
+
+    content = Path("src/transformer_classifier.py").read_text(encoding="utf-8")
+    assert 'metric_for_best_model="eval_qwk"' in content

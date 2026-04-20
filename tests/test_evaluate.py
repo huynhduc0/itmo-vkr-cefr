@@ -34,6 +34,7 @@ class TestComputeMetrics:
         assert metrics["accuracy"] == pytest.approx(1.0)
         assert metrics["macro_f1"] == pytest.approx(1.0)
         assert metrics["qwk"] == pytest.approx(1.0)
+        assert metrics["mae"] == pytest.approx(0.0)
 
     def test_metric_keys(self, imperfect_predictions):
         y_true, y_pred = imperfect_predictions
@@ -41,6 +42,7 @@ class TestComputeMetrics:
         assert "accuracy" in metrics
         assert "macro_f1" in metrics
         assert "qwk" in metrics
+        assert "mae" in metrics
 
     def test_metric_ranges(self, imperfect_predictions):
         y_true, y_pred = imperfect_predictions
@@ -48,6 +50,7 @@ class TestComputeMetrics:
         assert 0.0 <= metrics["accuracy"] <= 1.0
         assert 0.0 <= metrics["macro_f1"] <= 1.0
         assert -1.0 <= metrics["qwk"] <= 1.0
+        assert metrics["mae"] >= 0.0
 
     def test_returns_floats(self, imperfect_predictions):
         y_true, y_pred = imperfect_predictions
@@ -110,3 +113,4 @@ class TestPrintEvaluationReport:
         assert "Accuracy" in captured.out
         assert "Macro-F1" in captured.out
         assert "QWK" in captured.out
+        assert "MAE" in captured.out

@@ -8,3 +8,4 @@ evaluate>=0.4.0
 torch>=2.0.0
 numpy>=1.24.0
 pandas>=2.0.0
+langdetect>=1.0.9

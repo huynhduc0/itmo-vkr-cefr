@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from src.config import ID2LABEL, LABEL2ID, RANDOM_SEED, TRANSFORMER_CONFIG
+from src.evaluate import compute_metrics
 
 NUM_LABELS = len(LABEL2ID)
 
@@ -172,7 +173,7 @@ def train_ordinal(
     warmup_steps = int(0.1 * total_steps)
     scheduler = get_linear_schedule_with_warmup(optimizer, warmup_steps, total_steps)
 
-    best_val_acc = -1.0
+    best_val_qwk = float("-inf")
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0.0
@@ -198,13 +199,14 @@ def train_ordinal(
 
         # Validation
         val_preds = _predict_ordinal_batched(model, val_loader, device)
-        val_acc = float((np.array(val_preds) == np.array(val_labels)).mean())
+        val_metrics = compute_metrics(val_labels, val_preds)
         avg_loss = total_loss / max(len(train_loader), 1)
         print(
-            f"Epoch {epoch + 1}/{num_epochs}  loss={avg_loss:.4f}  val_acc={val_acc:.4f}"
+            f"Epoch {epoch + 1}/{num_epochs}  loss={avg_loss:.4f}  "
+            f"val_qwk={val_metrics['qwk']:.4f}  val_mae={val_metrics['mae']:.4f}"
         )
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        if val_metrics["qwk"] > best_val_qwk:
+            best_val_qwk = val_metrics["qwk"]
             import os
             os.makedirs(output_dir, exist_ok=True)
             torch.save(model.state_dict(), f"{output_dir}/best_model.pt")

@@ -14,14 +14,18 @@ from src.config import CEFR_LEVELS, LABEL2ID
 from src.data_utils import (
     build_token_counts,
     count_tokens,
+    detect_text_language,
     filter_by_length,
     filter_min_class_size,
     get_label_distribution,
     load_dataset,
+    load_and_prepare_multilingual_tracks,
     load_jsonl,
+    load_dataset_records,
     normalize_label,
     normalize_text,
     remove_duplicates,
+    resolve_record_language,
     save_jsonl,
     set_seed,
     stratified_split,
@@ -143,6 +147,96 @@ class TestLoadDataset:
 
         with pytest.raises(RuntimeError, match="Failed to download/load dataset"):
             load_dataset(dataset_name="UniversalCEFR/cefr_sp_en")
+
+
+class TestLoadDatasetRecords:
+    def test_returns_raw_records(self, monkeypatch):
+        fake_rows = [{"text": "Hello", "cefr_level": "A1", "lang": "en"}]
+
+        fake_datasets = types.ModuleType("datasets")
+        fake_datasets.load_dataset = lambda *args, **kwargs: fake_rows
+        monkeypatch.setitem(sys.modules, "datasets", fake_datasets)
+
+        records = load_dataset_records("some/dataset")
+        assert records == fake_rows
+
+
+class TestResolveRecordLanguage:
+    def test_prefers_record_metadata(self):
+        record = {"lang": "de", "text": "Hallo"}
+        assert resolve_record_language(record, dataset_language="en") == "de"
+
+    def test_falls_back_to_dataset_language(self):
+        record = {"text": "Bonjour"}
+        assert resolve_record_language(record, dataset_language="fr") == "fr"
+
+    def test_uses_langdetect_when_enabled(self, monkeypatch):
+        monkeypatch.setattr("src.data_utils.detect_text_language", lambda text: "ru")
+        record = {"text": "Привет мир"}
+        assert resolve_record_language(record, use_langdetect=True) == "ru"
+
+
+class TestCombinedMultilingualBuilder:
+    def test_groups_records_by_metadata_language(self, monkeypatch):
+        datasets_map = {
+            "ds1": [
+                {"text": "Hello", "cefr_level": "A1", "lang": "en"},
+                {"text": "Hallo", "cefr_level": "A2", "lang": "de"},
+            ],
+            "ds2": [
+                {"text": "Bonjour", "cefr_level": "B1", "language": "fr"},
+            ],
+        }
+
+        monkeypatch.setattr(
+            "src.data_utils.load_dataset_records",
+            lambda dataset_name, split="train": datasets_map[dataset_name],
+        )
+
+        captured = {}
+
+        def fake_prepare_tracks(**kwargs):
+            texts = kwargs["texts_raw"]
+            labels = kwargs["labels"]
+            captured.setdefault(tuple(texts), labels)
+            return {"sentence": ((texts, labels, []), ([], [], []), ([], [], [])), "essay": (([], [], []), ([], [], []), ([], [], []))}
+
+        monkeypatch.setattr("src.data_utils._prepare_tracks_from_arrays", fake_prepare_tracks)
+
+        results = load_and_prepare_multilingual_tracks(
+            dataset_specs=[{"dataset_name": "ds1"}, {"dataset_name": "ds2"}],
+            allowed_languages=("en", "de", "fr"),
+        )
+
+        assert results["en"]["sentence"][0][0] == ["Hello"]
+        assert results["de"]["sentence"][0][0] == ["Hallo"]
+        assert results["fr"]["sentence"][0][0] == ["Bonjour"]
+
+    def test_can_use_langdetect_fallback(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.data_utils.load_dataset_records",
+            lambda dataset_name, split="train": [
+                {"text": "Hola mundo", "cefr_level": "A1"},
+                {"text": "Ciao mondo", "cefr_level": "A2"},
+            ],
+        )
+        monkeypatch.setattr(
+            "src.data_utils.detect_text_language",
+            lambda text: "es" if "Hola" in text else "it",
+        )
+        monkeypatch.setattr(
+            "src.data_utils._prepare_tracks_from_arrays",
+            lambda **kwargs: {"sentence": ((kwargs["texts_raw"], kwargs["labels"], []), ([], [], []), ([], [], [])), "essay": (([], [], []), ([], [], []), ([], [], []))},
+        )
+
+        results = load_and_prepare_multilingual_tracks(
+            dataset_specs=[{"dataset_name": "mixed"}],
+            allowed_languages=("es", "it"),
+            use_langdetect=True,
+        )
+
+        assert results["es"]["sentence"][0][0] == ["Hola mundo"]
+        assert results["it"]["sentence"][0][0] == ["Ciao mondo"]
 
 
 class TestRemoveDuplicates:
@@ -387,7 +481,7 @@ class TestLanguagePresets:
 
     def test_english_preset_uses_roberta(self):
         from src.config import LANGUAGE_PRESETS
-        assert LANGUAGE_PRESETS["en"]["tokenizer"] == "roberta-base"
+        assert LANGUAGE_PRESETS["en"]["tokenizer"] == "xlm-roberta-base"
 
     def test_russian_preset_uses_xlm_roberta(self):
         from src.config import LANGUAGE_PRESETS
@@ -409,7 +503,7 @@ class TestLanguageModelSelection:
     def test_english_transformer_default_stays_roberta(self):
         from src.config import get_default_transformer_model
 
-        assert get_default_transformer_model("en", "sentence") == "roberta-base"
+        assert get_default_transformer_model("en", "sentence") == "xlm-roberta-base"
 
     def test_non_english_transformer_default_uses_multilingual_encoder(self):
         from src.config import get_default_transformer_model
@@ -590,6 +684,62 @@ class TestPrepareDataPlaceholderValidation:
                 "--language", "all",
                 "--dataset", "some_org/one_dataset",
                 "--output", str(tmp_path),
+            ],
+        ):
+            from src.prepare_data import parse_args
+            with pytest.raises(SystemExit) as exc_info:
+                parse_args()
+            assert exc_info.value.code != 0
+
+    def test_combined_manifest_is_accepted(self, tmp_path):
+        from unittest.mock import patch
+
+        manifest = tmp_path / "combined.json"
+        manifest.write_text('[{"dataset_name":"org/ds","language":"en"}]', encoding="utf-8")
+
+        with patch(
+            "sys.argv",
+            [
+                "prepare_data",
+                "--combined_manifest", str(manifest),
+                "--output", str(tmp_path / "out"),
+            ],
+        ):
+            from src.prepare_data import parse_args
+            args = parse_args()
+            assert args.combined_manifest == str(manifest)
+
+    def test_combined_manifest_rejects_language(self, tmp_path):
+        from unittest.mock import patch
+
+        manifest = tmp_path / "combined.json"
+        manifest.write_text("[]", encoding="utf-8")
+
+        with patch(
+            "sys.argv",
+            [
+                "prepare_data",
+                "--combined_manifest", str(manifest),
+                "--language", "en",
+            ],
+        ):
+            from src.prepare_data import parse_args
+            with pytest.raises(SystemExit) as exc_info:
+                parse_args()
+            assert exc_info.value.code != 0
+
+    def test_combined_manifest_rejects_dataset(self, tmp_path):
+        from unittest.mock import patch
+
+        manifest = tmp_path / "combined.json"
+        manifest.write_text("[]", encoding="utf-8")
+
+        with patch(
+            "sys.argv",
+            [
+                "prepare_data",
+                "--combined_manifest", str(manifest),
+                "--dataset", "org/ds",
             ],
         ):
             from src.prepare_data import parse_args

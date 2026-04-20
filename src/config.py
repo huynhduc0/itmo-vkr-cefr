@@ -23,7 +23,7 @@ TEST_RATIO = 0.1
 
 # Data preparation configuration (DATA_PREP.md)
 DATA_PREP_CONFIG = {
-    "tokenizer": "roberta-base",
+    "tokenizer": "xlm-roberta-base",
     # Sentence-level track: 5 ≤ n_tokens ≤ 64
     "sentence_min_tokens": 5,
     "sentence_max_tokens": 64,
@@ -44,8 +44,8 @@ TFIDF_CONFIG = {
 
 # Transformer fine-tuning hyperparameters
 TRANSFORMER_CONFIG = {
-    "sentence_model": "roberta-base",
-    "essay_model": "roberta-base",
+    "sentence_model": "xlm-roberta-base",
+    "essay_model": "xlm-roberta-base",
     "max_length_sentence": 128,
     "max_length_essay": 512,
     "batch_size": 16,
@@ -110,7 +110,7 @@ PLACEHOLDER_DATASETS = {
 LANGUAGE_PRESETS = {
     "en": {
         "dataset_name": DEFAULT_LANGUAGE_DATASETS["en"],
-        "tokenizer": "roberta-base",
+        "tokenizer": MULTILINGUAL_TOKENIZER,
         "text_column": "text",
         "label_column": "cefr_level",
     },
