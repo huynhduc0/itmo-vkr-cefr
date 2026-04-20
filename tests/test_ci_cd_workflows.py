@@ -37,7 +37,6 @@ def test_full_pipeline_has_manual_trigger_and_cpu_experiment_filter():
     assert "contains(format(' {0} ', inputs.exps), ' 5 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 6 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 7 ')" in content
-    assert "contains(format(' {0} ', inputs.exps), ' 8 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 9 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 10 ')" in content
 
@@ -45,6 +44,7 @@ def test_full_pipeline_has_manual_trigger_and_cpu_experiment_filter():
 def test_full_pipeline_has_gpu_filters_for_exp11_to_exp14():
     content = _read(".github/workflows/full_pipeline.yml")
 
+    assert "contains(format(' {0} ', inputs.exps), ' 8 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 11 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 12 ')" in content
     assert "contains(format(' {0} ', inputs.exps), ' 13 ')" in content
@@ -78,3 +78,11 @@ def test_full_pipeline_loops_over_all_languages_when_requested():
     assert "for lang in en ru it es de fr; do" in content
     assert '--data_dir    "data/$lang"' in content
     assert '-n "${{ inputs.combined_manifest }}" || "${{ inputs.language }}" == "all"' in content
+
+
+def test_full_pipeline_generates_visualizations_and_preserves_language_results():
+    content = _read(".github/workflows/full_pipeline.yml")
+
+    assert "python -m src.publish_results" in content
+    assert '--visuals_dir "visuals/generated/${{ inputs.task }}"' in content
+    assert 'RUNDIR="results/${{ github.run_id }}/${{ inputs.task }}"' in content

@@ -1,0 +1,34 @@
+[
+  {
+    "dataset_name": "UniversalCEFR/cefr_sp_en",
+    "language": "en"
+  },
+  {
+    "dataset_name": "UniversalCEFR/readme_ru",
+    "language": "ru"
+  },
+  {
+    "dataset_name": "UniversalCEFR/merlin_it",
+    "language": "it"
+  },
+  {
+    "dataset_name": "UniversalCEFR/caes_es",
+    "language": "es"
+  },
+  {
+    "dataset_name": "UniversalCEFR/merlin_de",
+    "language": "de"
+  },
+  {
+    "dataset_name": "UniversalCEFR/elg_cefr_de",
+    "language": "de"
+  },
+  {
+    "dataset_name": "UniversalCEFR/readme_fr",
+    "language": "fr"
+  },
+  {
+    "dataset_name": "UniversalCEFR/kwiqiz_fr",
+    "language": "fr"
+  }
+]

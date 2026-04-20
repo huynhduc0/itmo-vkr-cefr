@@ -497,15 +497,22 @@ def run_exp8(
         )
 
         print(f"Loading zero-shot source corpus: {source_dataset}")
-        (src_train_t, src_train_l), (src_val_t, src_val_l), _ = load_and_split_dataset(
-            dataset_name=source_dataset,
-            text_column=DATASET_CONFIG["text_column"],
-            label_column=DATASET_CONFIG["label_column"],
-            seed=seed,
-            deduplicate=True,
-        )
-
-        from src.transformer_classifier import predict_transformer, train_transformer
+        try:
+            (src_train_t, src_train_l), (src_val_t, src_val_l), _ = load_and_split_dataset(
+                dataset_name=source_dataset,
+                text_column=DATASET_CONFIG["text_column"],
+                label_column=DATASET_CONFIG["label_column"],
+                seed=seed,
+                deduplicate=True,
+            )
+            from src.transformer_classifier import predict_transformer, train_transformer
+        except ModuleNotFoundError as exc:
+            missing_module = exc.name or "required dependency"
+            raise RuntimeError(
+                "Exp 8 zero-shot requires the full ML dependency stack "
+                f"(missing module: {missing_module}). "
+                "Install requirements.txt or run Exp 8 in the transformer workflow stage."
+            ) from exc
 
         trainer, tokenizer = train_transformer(
             model_name=source_model,

@@ -16,7 +16,7 @@ on:
       exps:
         description: >
           Space-separated experiment IDs to run.
-          CPU-safe: 0 1 5 6 7 8 9 10  |  Needs GPU: 2 3 11 12 13  |  Needs GPU + HF_TOKEN: 4 14
+          CPU-safe: 0 1 5 6 7 9 10  |  Needs GPU/full ML stack: 2 3 8 11 12 13  |  Needs GPU + HF_TOKEN: 4 14
         required: true
         default: "0 1 5 7"
       language:
@@ -153,7 +153,7 @@ jobs:
           retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6, 7, 8, 9, 10)
+# Stage 3 – Run experiments (CPU baselines: Exp 0, 1, 5, 6, 7, 9, 10)
 # ─────────────────────────────────────────────────────────────────────────────
   run-cpu-experiments:
     name: Run CPU experiments
@@ -168,7 +168,6 @@ jobs:
       contains(format(' {0} ', inputs.exps), ' 5 ') ||
       contains(format(' {0} ', inputs.exps), ' 6 ') ||
       contains(format(' {0} ', inputs.exps), ' 7 ') ||
-      contains(format(' {0} ', inputs.exps), ' 8 ') ||
       contains(format(' {0} ', inputs.exps), ' 9 ') ||
       contains(format(' {0} ', inputs.exps), ' 10 ')
 
@@ -190,14 +189,14 @@ jobs:
           name: prepared-data
           path: data/
 
-      - name: Run CPU experiments (Exp 0, 1, 5, 7, 8, 9, 10 from JSONL)
+      - name: Run CPU experiments (Exp 0, 1, 5, 7, 9, 10 from JSONL)
         # Exp 6 (domain transfer) loads directly from HuggingFace so it's
         # handled separately. Here we run Exp 0/1/5 from pre-prepared JSONL.
         run: |
           # Filter requested experiments to CPU-safe ones from JSONL.
           CPU_EXPS=""
           for exp in ${{ inputs.exps }}; do
-            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" || "$exp" == "7" || "$exp" == "8" || "$exp" == "9" || "$exp" == "10" ]]; then
+            if [[ "$exp" == "0" || "$exp" == "1" || "$exp" == "5" || "$exp" == "7" || "$exp" == "9" || "$exp" == "10" ]]; then
               CPU_EXPS="$CPU_EXPS $exp"
             fi
           done
@@ -222,7 +221,7 @@ jobs:
                 2>&1 | tee results_cpu.txt
             fi
           else
-            echo "No JSONL CPU experiments (0,1,5,7,8,9,10) requested – skipping."
+            echo "No JSONL CPU experiments (0,1,5,7,9,10) requested – skipping."
           fi
 
       - name: Run Exp 6 (domain transfer, if requested)
@@ -252,7 +251,7 @@ jobs:
           retention-days: 30
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage 4 – Transformer experiments (Exp 2, 3) – requires GPU runner
+# Stage 4 – Transformer experiments (Exp 2, 3, 8, 11, 12, 13) – requires full ML stack
 # ─────────────────────────────────────────────────────────────────────────────
   run-transformer-experiments:
     name: Run transformer experiments (GPU)
@@ -264,6 +263,7 @@ jobs:
     if: |
       contains(format(' {0} ', inputs.exps), ' 2 ') ||
       contains(format(' {0} ', inputs.exps), ' 3 ') ||
+      contains(format(' {0} ', inputs.exps), ' 8 ') ||
       contains(format(' {0} ', inputs.exps), ' 11 ') ||
       contains(format(' {0} ', inputs.exps), ' 12 ') ||
       contains(format(' {0} ', inputs.exps), ' 13 ')
@@ -292,7 +292,7 @@ jobs:
         run: |
           TRANS_EXPS=""
           for exp in ${{ inputs.exps }}; do
-            if [[ "$exp" == "2" || "$exp" == "3" || "$exp" == "11" || "$exp" == "12" || "$exp" == "13" ]]; then
+            if [[ "$exp" == "2" || "$exp" == "3" || "$exp" == "8" || "$exp" == "11" || "$exp" == "12" || "$exp" == "13" ]]; then
               TRANS_EXPS="$TRANS_EXPS $exp"
             fi
           done
@@ -445,6 +445,10 @@ jobs:
           ref: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: Download all experiment result artifacts
         uses: actions/download-artifact@v4
         with:
@@ -453,16 +457,15 @@ jobs:
           merge-multiple: false
         continue-on-error: true
 
-      - name: Organize results into results/{run_id}/{task}/
+      - name: Organize results into results/{run_id}/{task}/ and build visuals
         run: |
           RUNDIR="results/${{ github.run_id }}/${{ inputs.task }}"
           mkdir -p "$RUNDIR"
-
-          # Flatten all JSON, CSV and TXT files from downloaded artifacts
-          if [ -d results-raw ]; then
-            find results-raw/ \( -name "*.json" -o -name "*.csv" -o -name "*.txt" \) \
-              -exec cp {} "$RUNDIR/" \;
-          fi
+          python -m src.publish_results \
+            --download_root results-raw \
+            --output_dir "$RUNDIR" \
+            --default_language "${{ inputs.language }}" \
+            --visuals_dir "visuals/generated/${{ inputs.task }}"
 
           # Write run metadata so every result folder is self-describing
           cat > "$RUNDIR/run_info.json" <<EOF
@@ -487,7 +490,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add results/
+          git add results/ visuals/generated/
           # Only commit if there are staged changes
           if git diff --staged --quiet; then
             echo "No new result files to commit – nothing to push."

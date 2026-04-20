@@ -1,6 +1,6 @@
 # itmo-vkr-cefr
 
-Dự án nghiên cứu về phân loại trình độ tiếng Anh theo thang CEFR (A1–C2).
+Dự án nghiên cứu về phân loại trình độ CEFR đa ngôn ngữ (`en`, `ru`, `it`, `es`, `de`, `fr`).
 Bao gồm pipeline hoàn chỉnh: chuẩn bị dữ liệu → huấn luyện → đánh giá → lưu kết quả.
 
 ---
@@ -18,10 +18,10 @@ src/prepare_data.py          ← Tải & chuẩn hoá dữ liệu, tạo splits 
         ▼
 src/run_experiments.py       ← Chạy các thí nghiệm (Exp 0–14)
         │
-        ▼  results/{run_id}/{task}/results.json  &  results.csv
+        ▼  results/{run_id}/{task}/{lang}/results.json  &  results.csv
         │
         ▼
-results/ (được commit vào repo)   ← Kết quả được lưu vĩnh viễn trong git
+results/ + visuals/generated/     ← Kết quả, chart, badge được lưu vĩnh viễn trong git
 ```
 
 ---
@@ -38,7 +38,7 @@ results/ (được commit vào repo)   ← Kết quả được lưu vĩnh viễ
 | 5 | Hybrid essay classifier | CPU |
 | 6 | Domain transfer (cross-corpus) | CPU / GPU |
 | 7 | TF-IDF + LinearSVC | CPU |
-| 8 | TF-IDF + Complement Naive Bayes | CPU |
+| 8 | Zero-shot XLM-R | GPU / full ML stack |
 | 9 | Word-only TF-IDF + Logistic Regression | CPU |
 | 10 | Ensemble (LR + ComplementNB soft voting) | CPU |
 | 11 | DeBERTa-v3 fine-tune | GPU |
@@ -125,10 +125,10 @@ Workflow `workflow_dispatch` để chạy toàn bộ pipeline với dữ liệu 
 ```
 Stage 1 – lint-and-test         Unit tests (giống CI)
 Stage 2 – prepare-data          Tải dataset từ HuggingFace, sinh JSONL splits
-Stage 3 – run-cpu-experiments   Chạy Exp 0, 1, 5, 6, 7, 8, 9, 10 (CPU-only)
-Stage 4 – run-transformer-exp   Chạy Exp 2, 3, 11, 12, 13 (yêu cầu GPU)
+Stage 3 – run-cpu-experiments   Chạy Exp 0, 1, 5, 6, 7, 9, 10 (CPU-only)
+Stage 4 – run-transformer-exp   Chạy Exp 2, 3, 8, 11, 12, 13 (full ML stack / GPU)
 Stage 5 – run-llm-experiment    Chạy Exp 4, 14 (GPU + HF_TOKEN)
-Stage 6 – commit-results        ★ Commit kết quả vào repo
+Stage 6 – commit-results        ★ Commit kết quả + visualization vào repo
 ```
 
 #### Kết quả được đẩy về đâu?
@@ -139,9 +139,13 @@ Stage 6 – commit-results        ★ Commit kết quả vào repo
 results/
   {github.run_id}/
     {task}/
-      results.json      ← Metrics của tất cả experiments đã chạy
-      results.csv       ← Cùng nội dung, định dạng CSV
-      results_cpu.txt   ← Console log của CPU experiments
+      {lang}/
+        results.json    ← Metrics của các experiments cho ngôn ngữ đó
+        results.csv     ← Cùng nội dung, định dạng CSV
+      logs/
+        results_cpu_*.txt
+        results_transformer_*.txt
+        results_llm_*.txt
       run_info.json     ← Metadata: run ID, actor, sha, timestamp, inputs
 ```
 
@@ -150,6 +154,22 @@ results/
 - Dùng `git pull --rebase` trước khi push để tránh conflict khi chạy song song
 
 > **Lưu ý**: Mỗi lần trigger sẽ tạo một thư mục mới `results/{run_id}/` nên các lần chạy không ghi đè lên nhau.
+
+### Visualization nhanh
+
+Pipeline cũng cập nhật SVG chart và badge ổn định để xem nhanh ngay trên GitHub:
+
+- Sentence:
+  - [QWK Heatmap](visuals/generated/sentence/qwk_heatmap.svg)
+  - [Best QWK by Language](visuals/generated/sentence/best_qwk_by_language.svg)
+- Essay:
+  - [QWK Heatmap](visuals/generated/essay/qwk_heatmap.svg)
+  - [Best QWK by Language](visuals/generated/essay/best_qwk_by_language.svg)
+
+Badge gần nhất:
+
+![Sentence Best QWK](visuals/generated/sentence/badges/best-qwk.svg)
+![Sentence Languages](visuals/generated/sentence/badges/languages.svg)
 
 #### GitHub Actions artifacts (tạm thời)
 
