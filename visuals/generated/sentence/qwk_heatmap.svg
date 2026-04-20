@@ -13,12 +13,12 @@
 <text x="62" y="86" font-family="Arial,sans-serif" font-size="12" text-anchor="end" fill="#111827">EN</text>
 <rect x="72" y="64" width="84" height="30" rx="6" fill="rgb(239,68,68)"/>
 <text x="114.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#111827">0.000</text>
-<rect x="160" y="64" width="84" height="30" rx="6" fill="rgb(148,151,114)"/>
-<text x="202.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#ffffff">0.668</text>
+<rect x="160" y="64" width="84" height="30" rx="6" fill="rgb(149,150,114)"/>
+<text x="202.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#ffffff">0.663</text>
 <rect x="248" y="64" width="84" height="30" rx="6" fill="#e5e7eb"/>
 <text x="290.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#111827">—</text>
-<rect x="336" y="64" width="84" height="30" rx="6" fill="rgb(148,151,114)"/>
-<text x="378.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#ffffff">0.668</text>
+<rect x="336" y="64" width="84" height="30" rx="6" fill="rgb(149,150,114)"/>
+<text x="378.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#ffffff">0.663</text>
 <rect x="424" y="64" width="84" height="30" rx="6" fill="#e5e7eb"/>
 <text x="466.0" y="86" font-family="Arial,sans-serif" font-size="11" text-anchor="middle" fill="#111827">—</text>
 <rect x="512" y="64" width="84" height="30" rx="6" fill="rgb(144,155,116)"/>
