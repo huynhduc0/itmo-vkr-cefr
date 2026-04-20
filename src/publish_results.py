@@ -72,6 +72,8 @@ def collect_result_artifacts(download_root: Path, output_dir: Path, default_lang
                 continue
             if len(subparts) == 1:
                 dest = output_dir / normalized_default_language / subparts[0]
+            elif subparts[0] not in SUPPORTED_LANGUAGES:
+                dest = output_dir / "extras" / Path(*subparts)
             else:
                 dest = output_dir.joinpath(*subparts)
 

@@ -47,6 +47,20 @@ def test_collect_result_artifacts_places_single_language_results_under_default_l
     assert output_dir.joinpath("es", "results.json").exists()
 
 
+def test_collect_result_artifacts_routes_unknown_subdirs_to_extras(tmp_path):
+    download_root = tmp_path / "results-raw"
+    output_dir = tmp_path / "results" / "125" / "sentence"
+
+    _write_json(
+        download_root / "artifact-a" / "results" / "llma" / "results.json",
+        [{"name": "Exp 4 – LLM+LoRA", "qwk": 0.1, "macro_f1": 0.2, "accuracy": 0.3}],
+    )
+
+    collect_result_artifacts(download_root, output_dir, default_language="en")
+
+    assert output_dir.joinpath("extras", "llma", "results.json").exists()
+
+
 def test_generate_visuals_emits_svg_files(tmp_path):
     results_dir = tmp_path / "results" / "555" / "sentence"
     visuals_dir = tmp_path / "visuals" / "generated" / "sentence"

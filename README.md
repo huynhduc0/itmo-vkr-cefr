@@ -155,21 +155,43 @@ results/
 
 > **Lưu ý**: Mỗi lần trigger sẽ tạo một thư mục mới `results/{run_id}/` nên các lần chạy không ghi đè lên nhau.
 
-### Visualization nhanh
+<!-- AUTO-RESULTS-START -->
+## Results Dashboard
 
-Pipeline cũng cập nhật SVG chart và badge ổn định để xem nhanh ngay trên GitHub:
+Visualization được cập nhật tự động từ multilingual runs mới nhất của pipeline.
 
-- Sentence:
+### Visuals
+- `sentence`:
   - [QWK Heatmap](visuals/generated/sentence/qwk_heatmap.svg)
   - [Best QWK by Language](visuals/generated/sentence/best_qwk_by_language.svg)
-- Essay:
-  - [QWK Heatmap](visuals/generated/essay/qwk_heatmap.svg)
-  - [Best QWK by Language](visuals/generated/essay/best_qwk_by_language.svg)
+- `essay`:
+  - chưa có visualization được commit
 
-Badge gần nhất:
+### Badges
 
 ![Sentence Best QWK](visuals/generated/sentence/badges/best-qwk.svg)
+![Sentence Best Macro-F1](visuals/generated/sentence/badges/best-macro-f1.svg)
 ![Sentence Languages](visuals/generated/sentence/badges/languages.svg)
+
+### Sentence
+
+Run mới nhất: [`results/24662749764/sentence`](results/24662749764/sentence)
+
+| Language | Best experiment by QWK | QWK | Accuracy | Note |
+|----------|-------------------------|-----|----------|------|
+| `en` | `Exp 7` | `0.6996` | `0.5195` | - |
+| `ru` | `Exp 7` | `0.6634` | `0.4331` | - |
+| `it` | `N/A` | `N/A` | `N/A` | no committed results for this language |
+| `es` | `Exp 7` | `0.8612` | `0.9674` | - |
+| `de` | `N/A` | `N/A` | `N/A` | no committed results for this language |
+| `fr` | `Exp 10` | `0.7097` | `0.5282` | - |
+
+Inputs: `task=sentence`, `exps=0 1 5 7 9 10`, `language=all`
+
+### Essay
+
+Chưa có multilingual run nào được commit cho task này.
+<!-- AUTO-RESULTS-END -->
 
 #### GitHub Actions artifacts (tạm thời)
 
