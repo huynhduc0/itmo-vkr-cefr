@@ -49,14 +49,16 @@ def test_run_exp14_averages_three_exp4_runs(monkeypatch):
     def fake_run_exp4(**kwargs):
         calls.append(kwargs["seed"])
         seed = kwargs["seed"]
-        return rexp.ExperimentResult(
-            name="exp4",
+        r_raw = rexp.ExperimentResult(name="exp4-raw", track=kwargs["track"])
+        r_constrained = rexp.ExperimentResult(
+            name="exp4-constrained",
             track=kwargs["track"],
             accuracy=0.5 + 0.01 * seed,
             macro_f1=0.4 + 0.01 * seed,
             qwk=0.3 + 0.01 * seed,
             latency=0.02,
         )
+        return [r_raw, r_constrained]
 
     monkeypatch.setattr(rexp, "run_exp4", fake_run_exp4)
 

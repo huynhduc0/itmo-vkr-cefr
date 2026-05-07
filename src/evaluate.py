@@ -47,6 +47,57 @@ def compute_metrics(
     }
 
 
+def bootstrap_ci(
+    y_true: List[int],
+    y_pred: List[int],
+    n_bootstrap: int = 1000,
+    confidence: float = 0.95,
+    seed: int = 42,
+) -> Dict[str, float]:
+    """
+    Compute bootstrap 95% confidence-interval half-widths for QWK and Macro-F1.
+
+    Performs *n_bootstrap* resamplings with replacement and returns the
+    half-width of the symmetric percentile CI for each metric, so results
+    can be reported as ``{metric} ± {ci}``.
+
+    Args:
+        y_true:      ground-truth label ids
+        y_pred:      predicted label ids
+        n_bootstrap: number of bootstrap resamples (default 1000)
+        confidence:  CI level (default 0.95)
+        seed:        numpy random seed for reproducibility
+
+    Returns:
+        Dict with keys ``qwk_ci`` and ``macro_f1_ci`` (half-widths).
+    """
+    rng = np.random.default_rng(seed)
+    yt = np.array(y_true)
+    yp = np.array(y_pred)
+    n = len(yt)
+
+    qwk_samples: List[float] = []
+    f1_samples: List[float] = []
+
+    alpha = (1.0 - confidence) / 2.0
+
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        m = compute_metrics(yt[idx].tolist(), yp[idx].tolist())
+        qwk_samples.append(m["qwk"])
+        f1_samples.append(m["macro_f1"])
+
+    qwk_lo = float(np.quantile(qwk_samples, alpha))
+    qwk_hi = float(np.quantile(qwk_samples, 1.0 - alpha))
+    f1_lo = float(np.quantile(f1_samples, alpha))
+    f1_hi = float(np.quantile(f1_samples, 1.0 - alpha))
+
+    return {
+        "qwk_ci": (qwk_hi - qwk_lo) / 2.0,
+        "macro_f1_ci": (f1_hi - f1_lo) / 2.0,
+    }
+
+
 def compute_confusion_matrix(
     y_true: List[int],
     y_pred: List[int],
