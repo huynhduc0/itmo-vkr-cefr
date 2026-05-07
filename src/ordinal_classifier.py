@@ -21,16 +21,51 @@ NUM_LABELS = len(LABEL2ID)
 
 
 # ---------------------------------------------------------------------------
+# Threshold initialisation (A1 fix)
+# ---------------------------------------------------------------------------
+
+def _compute_coral_bias_init(train_labels: List[int], num_labels: int = NUM_LABELS) -> np.ndarray:
+    """
+    Compute log-odds threshold initialisation from class priors.
+
+    threshold_k = log( P(Y <= k) / P(Y > k) )
+
+    All-zero initialisation puts every threshold at the same point in logit
+    space, causing ill-conditioned optimisation.  Log-odds initialisation
+    spreads the thresholds to match the empirical cumulative distribution,
+    giving each binary classifier a meaningful starting point.
+    """
+    counts = np.zeros(num_labels)
+    for label in train_labels:
+        counts[label] += 1
+    total = max(len(train_labels), 1)
+    biases = []
+    for k in range(num_labels - 1):
+        p_le_k = float(counts[: k + 1].sum()) / total
+        p_le_k = np.clip(p_le_k, 1e-6, 1.0 - 1e-6)
+        biases.append(np.log(p_le_k / (1.0 - p_le_k)))
+    return np.array(biases, dtype=np.float32)
+
+
+# ---------------------------------------------------------------------------
 # PyTorch model
 # ---------------------------------------------------------------------------
 
-def _build_ordinal_model(model_name: str, num_labels: int = NUM_LABELS):
+def _build_ordinal_model(
+    model_name: str,
+    num_labels: int = NUM_LABELS,
+    bias_init: Optional[np.ndarray] = None,
+):
     """
     Build a transformer encoder with a CORAL ordinal regression head.
 
     The backbone is any AutoModel-compatible encoder.  On top of the [CLS]
     pooled representation we add a linear layer with (num_labels - 1) outputs
     that share a weight column but have independent biases.
+
+    Args:
+        bias_init: Optional (num_labels-1,) array for threshold initialisation.
+                   Pass result of _compute_coral_bias_init() for better convergence.
     """
     import torch
     import torch.nn as nn
@@ -42,7 +77,10 @@ def _build_ordinal_model(model_name: str, num_labels: int = NUM_LABELS):
             self.encoder = AutoModel.from_pretrained(model_name)
             hidden_size = self.encoder.config.hidden_size
             self.fc = nn.Linear(hidden_size, 1, bias=False)
-            self.bias = nn.Parameter(torch.zeros(num_labels - 1))
+            if bias_init is not None:
+                self.bias = nn.Parameter(torch.tensor(bias_init, dtype=torch.float32))
+            else:
+                self.bias = nn.Parameter(torch.zeros(num_labels - 1))
 
         def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None):
             outputs = self.encoder(
@@ -158,7 +196,8 @@ def train_ordinal(
     set_seed(seed)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = _build_ordinal_model(model_name)
+    bias_init = _compute_coral_bias_init(train_labels)
+    model = _build_ordinal_model(model_name, bias_init=bias_init)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 

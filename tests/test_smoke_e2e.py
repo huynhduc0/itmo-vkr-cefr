@@ -337,7 +337,7 @@ class TestSaveResultsToFiles:
                 records = json.load(fh)
 
         assert len(records) == len(sample_results)
-        required_keys = {"name", "track", "accuracy", "macro_f1", "qwk", "mae", "latency_ms", "note"}
+        required_keys = {"name", "track", "accuracy", "macro_f1", "macro_f1_ci", "qwk", "qwk_ci", "mae", "latency_ms", "note"}
         for rec in records:
             assert required_keys == set(rec.keys())
             assert 0.0 <= rec["accuracy"] <= 1.0

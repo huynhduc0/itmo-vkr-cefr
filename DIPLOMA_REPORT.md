@@ -65,8 +65,15 @@ The integration of Artificial Intelligence (AI) into the educational domain, spe
 
 This graduation qualification work addresses this critical gap by extending automated CEFR classification beyond English to encompass a diverse set of six languages: **English (EN), Russian (RU), Spanish (ES), French (FR), Italian (IT), and German (DE)**.
 
-> **IMPORTANT:**
-> **Scientific novelty** of this work lies in the comprehensive, unified evaluation of six distinct languages under a dual-track (Sentence vs. Essay) regime. It pioneers the rigorous comparison of categorical versus ordinal (CORAL) loss formulations for multilingual datasets, and provides critical empirical evidence on the viability of parameter-efficient LLM adaptation (LoRA) versus discriminative mPLMs for cross-lingual zero-shot proficiency transfer.
+**Scientific novelty** of this work is expressed in the following specific, falsifiable contributions:
+
+1. **First unified cross-lingual CEFR evaluation across six typologically distinct languages.** This work provides the first systematic, controlled comparison of automated CEFR classification across English, Russian, Spanish, French, Italian, and German within a single dual-track (Sentence vs. Essay) experimental framework using a unified dataset, evaluation protocol, and metric set.
+
+2. **Empirical demonstration that XLM-R with categorical cross-entropy implicitly learns ordinal decision boundaries.** Confusion matrix analysis reveals strong diagonal clustering consistent with ordinal behavior, despite the absence of any explicit ordinal supervision. This constitutes grounds for questioning the necessity of explicit ordinal loss functions (e.g., CORAL) in high-capacity multilingual pretrained language models.
+
+3. **Systematic failure analysis of generative LLM adaptation for closed-set classification, with constrained decoding as mitigation.** LLaMA-3.2 + LoRA fine-tuning is shown to produce format hallucination — verbose conversational output rather than a single valid label — as the root cause of near-zero classification performance. Constrained decoding via exhaustive log-probability scoring over all six CEFR labels is proposed and evaluated as a principled mitigation, enabling a fair assessment of the model's true classification capability.
+
+4. **First empirical quantification of QWK degradation as a function of typological distance in zero-shot CEFR transfer.** Zero-shot cross-lingual transfer from English to typologically close languages (Romance: Spanish, French, Italian) yields QWK degradation of 0.05–0.07; transfer to typologically distant languages (Slavic: Russian) yields 0.11–0.13, establishing the first quantitative gradient of cross-lingual CEFR transfer quality.
 
 ---
 

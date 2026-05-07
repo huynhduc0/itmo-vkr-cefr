@@ -265,6 +265,69 @@ def train_llm_lora(
     return trainer, model, tokenizer
 
 
+def predict_llm_constrained(
+    model,
+    tokenizer,
+    texts: List[str],
+    task: str = "sentence",
+    language: str = "en",
+) -> np.ndarray:
+    """
+    Constrained decoding: score all 6 CEFR labels by exact log probability.
+
+    For each test text, computes P(label | prompt) for every CEFR level by a
+    single forward pass per label and returns the argmax.  This eliminates
+    format hallucination entirely — the model is never free to generate
+    anything other than a valid label.
+
+    Returns:
+        Array of predicted label ids (always valid, no -1 entries).
+    """
+    import torch
+
+    model.eval()
+    device = next(model.parameters()).device
+
+    # Pre-tokenize each CEFR label.  A leading space is added because labels
+    # follow the prompt text and most tokenizers emit a space-prefixed token
+    # for words that appear mid-sentence.
+    label_token_seqs = {
+        level: tokenizer.encode(" " + level, add_special_tokens=False)
+        for level in CEFR_LEVELS
+    }
+
+    predictions = []
+    for text in texts:
+        prompt = format_prompt(text, task, language)
+        prompt_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+        prompt_len = prompt_ids.shape[1]
+
+        best_level = CEFR_LEVELS[0]
+        best_log_prob = float("-inf")
+
+        for level, tok_ids in label_token_seqs.items():
+            label_ids = torch.tensor([tok_ids], device=device)
+            full_ids = torch.cat([prompt_ids, label_ids], dim=1)
+
+            with torch.no_grad():
+                outputs = model(full_ids)
+                logits = outputs.logits  # (1, seq_len, vocab)
+
+            # Sum log-probs: position (prompt_len - 1 + i) predicts tok_ids[i]
+            log_prob = 0.0
+            for i, tid in enumerate(tok_ids):
+                pos = prompt_len - 1 + i
+                log_softmax = torch.log_softmax(logits[0, pos, :], dim=-1)
+                log_prob += log_softmax[tid].item()
+
+            if log_prob > best_log_prob:
+                best_log_prob = log_prob
+                best_level = level
+
+        predictions.append(LABEL2ID[best_level])
+    return np.array(predictions)
+
+
 def predict_llm(
     model,
     tokenizer,

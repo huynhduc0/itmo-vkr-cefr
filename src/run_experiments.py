@@ -43,7 +43,7 @@ from src.data_utils import (
     set_seed,
     stratified_split,
 )
-from src.evaluate import compute_metrics, print_evaluation_report
+from src.evaluate import bootstrap_ci, compute_metrics, print_evaluation_report
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +133,8 @@ class ExperimentResult:
     mae: float = 0.0
     latency: float = 0.0
     note: str = ""
+    qwk_ci: float = 0.0       # bootstrap 95% CI half-width
+    macro_f1_ci: float = 0.0  # bootstrap 95% CI half-width
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +192,8 @@ def run_exp1(
     pipeline = train_baseline(train_texts, train_labels)
     preds, latency = _time_predict(pipeline.predict, test_texts)
     metrics = compute_metrics(test_labels, preds.tolist())
-    return ExperimentResult(name="Exp 1 – TF-IDF+LR", track=track, latency=latency, **metrics)
+    ci = bootstrap_ci(test_labels, preds.tolist())
+    return ExperimentResult(name="Exp 1 – TF-IDF+LR", track=track, latency=latency, **metrics, **ci)
 
 
 # ---------------------------------------------------------------------------
@@ -241,11 +244,13 @@ def run_exp2(
 
     preds, latency = _time_predict(_pred, test_texts)
     metrics = compute_metrics(test_labels, preds.tolist())
+    ci = bootstrap_ci(test_labels, preds.tolist())
     return ExperimentResult(
         name=f"Exp 2 – Transformer ({model_name})",
         track=track,
         latency=latency,
         **metrics,
+        **ci,
     )
 
 
@@ -296,11 +301,13 @@ def run_exp3(
 
     preds, latency = _time_predict(_pred, test_texts)
     metrics = compute_metrics(test_labels, preds.tolist())
+    ci = bootstrap_ci(test_labels, preds.tolist())
     return ExperimentResult(
         name=f"Exp 3 – Ordinal CORAL ({model_name})",
         track=track,
         latency=latency,
         **metrics,
+        **ci,
     )
 
 
@@ -318,8 +325,15 @@ def run_exp4(
     track: str,
     language: str = "en",
     seed: int = RANDOM_SEED,
-) -> ExperimentResult:
-    from src.llm_lora import predict_llm, train_llm_lora
+) -> List[ExperimentResult]:
+    """
+    Train LLM+LoRA once, then evaluate with two decoding strategies:
+
+    [0] Raw (regex extraction) — exposes format hallucination failure mode.
+    [1] Constrained decoding   — scores all 6 CEFR labels directly, eliminates
+                                  hallucination and gives a fair H3 assessment.
+    """
+    from src.llm_lora import predict_llm, predict_llm_constrained, train_llm_lora
 
     trainer, model, tokenizer = train_llm_lora(
         train_texts=train_texts,
@@ -331,24 +345,42 @@ def run_exp4(
         seed=seed,
     )
 
-    def _pred(texts):
+    # --- raw (regex) ---
+    def _pred_raw(texts):
         return predict_llm(model, tokenizer, texts, task=track, language=language)
 
-    preds, latency = _time_predict(_pred, test_texts)
-    valid_mask = preds != -1
+    preds_raw, latency_raw = _time_predict(_pred_raw, test_texts)
+    valid_mask = preds_raw != -1
     if valid_mask.sum() == 0:
-        return ExperimentResult(
-            name="Exp 4 – LLM+LoRA", track=track, note="no valid predictions"
+        result_raw = ExperimentResult(
+            name="Exp 4 – LLM+LoRA (raw)", track=track, note="no valid predictions"
         )
-    filtered_true = [test_labels[i] for i in range(len(test_labels)) if valid_mask[i]]
-    metrics = compute_metrics(filtered_true, preds[valid_mask].tolist())
-    return ExperimentResult(
-        name="Exp 4 – LLM+LoRA",
+    else:
+        filtered_true = [test_labels[i] for i in range(len(test_labels)) if valid_mask[i]]
+        metrics_raw = compute_metrics(filtered_true, preds_raw[valid_mask].tolist())
+        result_raw = ExperimentResult(
+            name="Exp 4 – LLM+LoRA (raw)",
+            track=track,
+            latency=latency_raw,
+            note=f"{valid_mask.sum()}/{len(test_texts)} valid; format hallucination baseline",
+            **metrics_raw,
+        )
+
+    # --- constrained decoding ---
+    def _pred_constrained(texts):
+        return predict_llm_constrained(model, tokenizer, texts, task=track, language=language)
+
+    preds_constrained, latency_constrained = _time_predict(_pred_constrained, test_texts)
+    metrics_constrained = compute_metrics(test_labels, preds_constrained.tolist())
+    result_constrained = ExperimentResult(
+        name="Exp 4 – LLM+LoRA (constrained)",
         track=track,
-        latency=latency,
-        note=f"{valid_mask.sum()}/{len(test_texts)} valid",
-        **metrics,
+        latency=latency_constrained,
+        note="log-prob scoring over all 6 labels",
+        **metrics_constrained,
     )
+
+    return [result_raw, result_constrained]
 
 
 # ---------------------------------------------------------------------------
@@ -538,12 +570,14 @@ def run_exp8(
 
         preds, latency = _time_predict(_pred, test_texts)
         metrics = compute_metrics(test_labels, preds.tolist())
+        ci = bootstrap_ci(test_labels, preds.tolist())
         return ExperimentResult(
             name="Exp 8 – Zero-shot XLM-R",
             track=track,
             latency=latency,
             note=f"train={source_dataset} (en) → eval={language}",
             **metrics,
+            **ci,
         )
 
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -785,7 +819,7 @@ def run_exp14(
     runs = []
     latencies = []
     for delta in [0, 1, 2]:
-        r = run_exp4(
+        pair = run_exp4(
             train_texts=train_texts,
             train_labels=train_labels,
             val_texts=val_texts,
@@ -796,6 +830,8 @@ def run_exp14(
             language=language,
             seed=seed + delta,
         )
+        # Use constrained decoding result (index 1) as the primary for averaging
+        r = pair[1]
         runs.append(r)
         latencies.append(r.latency)
 
@@ -820,16 +856,18 @@ def print_comparison_table(results: List[ExperimentResult]) -> None:
     """Print a formatted comparison table of all experiment results."""
     header = (
         f"{'Experiment':<45} {'Track':<10} "
-        f"{'Acc':>6} {'F1':>6} {'QWK':>6} {'MAE':>6} {'Lat(ms)':>9} {'Note'}"
+        f"{'Acc':>6} {'F1':>14} {'QWK':>14} {'MAE':>6} {'Lat(ms)':>9} {'Note'}"
     )
     sep = "-" * len(header)
     print(f"\n{sep}")
     print(header)
     print(sep)
     for r in results:
+        f1_str = f"{r.macro_f1:.4f}±{r.macro_f1_ci:.3f}" if r.macro_f1_ci else f"{r.macro_f1:.4f}"
+        qwk_str = f"{r.qwk:.4f}±{r.qwk_ci:.3f}" if r.qwk_ci else f"{r.qwk:.4f}"
         print(
             f"{r.name:<45} {r.track:<10} "
-            f"{r.accuracy:>6.4f} {r.macro_f1:>6.4f} {r.qwk:>6.4f} {r.mae:>6.4f} "
+            f"{r.accuracy:>6.4f} {f1_str:>14} {qwk_str:>14} {r.mae:>6.4f} "
             f"{r.latency * 1000:>8.2f}ms  {r.note}"
         )
     print(sep)
@@ -944,7 +982,9 @@ def save_results_to_files(results: List[ExperimentResult], output_dir: str) -> N
             "track": r.track,
             "accuracy": round(r.accuracy, 6),
             "macro_f1": round(r.macro_f1, 6),
+            "macro_f1_ci": round(r.macro_f1_ci, 6),
             "qwk": round(r.qwk, 6),
+            "qwk_ci": round(r.qwk_ci, 6),
             "mae": round(r.mae, 6),
             "latency_ms": round(r.latency * 1000, 4),
             "note": r.note,
@@ -1037,16 +1077,17 @@ def main():
         results.append(r)
 
     if 4 in args.exps:
-        print("\n--- Exp 4: LLM + LoRA ---")
-        r = run_exp4(
-            train_texts, train_labels,
-            val_texts, val_labels,
-            test_texts, test_labels,
-            track=args.task,
-            language=language,
-            seed=args.seed,
+        print("\n--- Exp 4: LLM + LoRA (raw + constrained) ---")
+        results.extend(
+            run_exp4(
+                train_texts, train_labels,
+                val_texts, val_labels,
+                test_texts, test_labels,
+                track=args.task,
+                language=language,
+                seed=args.seed,
+            )
         )
-        results.append(r)
 
     if 5 in args.exps:
         print("\n--- Exp 5: Hybrid essay (sentence agg) ---")
