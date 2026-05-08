@@ -46,9 +46,14 @@ def load_llm(
     """
     Load an LLM with optional 4-bit quantization.
 
+    When *use_4bit* is False (e.g. P100 / sm_60 which lacks bitsandbytes
+    support), the model is loaded in fp16 instead of fp32 to avoid doubling
+    VRAM usage (~6 GB fp16 vs ~12 GB fp32 for a 3B-parameter model).
+
     Returns:
         (model, tokenizer)
     """
+    import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
@@ -63,8 +68,10 @@ def load_llm(
             device_map="auto",
         )
     else:
+        # fp16: ~6 GB for 3B params, fits on P100-16GB; fp32 would need ~12 GB
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
+            torch_dtype=torch.float16,
             device_map="auto",
         )
     return model, tokenizer
@@ -91,11 +98,19 @@ def build_lora_config(
     )
 
 
-def apply_lora(model, lora_config=None):
-    """Apply LoRA adapters to the model."""
-    from peft import get_peft_model, prepare_model_for_kbit_training
+def apply_lora(model, lora_config=None, use_4bit: bool = LLM_CONFIG["use_4bit"]):
+    """Apply LoRA adapters to the model.
 
-    model = prepare_model_for_kbit_training(model)
+    *prepare_model_for_kbit_training* must only be called on quantized
+    (4-bit / 8-bit) models.  When running in plain fp16 (e.g. on P100),
+    skip that step and pass the model directly to get_peft_model.
+    """
+    from peft import get_peft_model
+
+    if use_4bit:
+        from peft import prepare_model_for_kbit_training
+        model = prepare_model_for_kbit_training(model)
+
     if lora_config is None:
         lora_config = build_lora_config()
     model = get_peft_model(model, lora_config)
@@ -218,6 +233,9 @@ def train_llm_lora(
     """
     Train an LLM with LoRA/QLoRA for CEFR classification via SFT.
 
+    Reads *use_4bit* from LLM_CONFIG at call time so that notebook patches
+    (``cfg.LLM_CONFIG["use_4bit"] = False``) take effect without restarting.
+
     Returns:
         (trainer, model, tokenizer)
     """
@@ -225,10 +243,13 @@ def train_llm_lora(
 
     from src.data_utils import set_seed
 
+    # Read at call time — caller may have patched LLM_CONFIG["use_4bit"]
+    use_4bit: bool = LLM_CONFIG["use_4bit"]
+
     set_seed(seed)
 
-    model, tokenizer = load_llm(base_model_name)
-    model = apply_lora(model)
+    model, tokenizer = load_llm(base_model_name, use_4bit=use_4bit)
+    model = apply_lora(model, use_4bit=use_4bit)
 
     train_dataset = build_sft_dataset(
         train_texts, train_labels, tokenizer, task=task, language=language
