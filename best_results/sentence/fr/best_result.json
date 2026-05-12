@@ -1,0 +1,14 @@
+{
+  "name": "Exp 10 – Ensemble (LR+CNB)",
+  "track": "sentence",
+  "accuracy": 0.528169,
+  "macro_f1": 0.458662,
+  "qwk": 0.709677,
+  "mae": 0.521127,
+  "latency_ms": 0.3162,
+  "note": "",
+  "run_id": "24662749764",
+  "run_number": "13",
+  "task": "sentence",
+  "language": "fr"
+}
