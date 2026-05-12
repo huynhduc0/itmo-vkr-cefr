@@ -251,11 +251,7 @@ def train_llm_lora(
         save_strategy="epoch",
         seed=seed,
         logging_steps=50,
-        # Do NOT set fp16=True for QLoRA. The 4-bit model already sets its
-        # compute dtype via BitsAndBytesConfig(bnb_4bit_compute_dtype=float16).
-        # Adding fp16=True on the Trainer causes dtype mismatches inside cuBLAS
-        # (CUBLAS_STATUS_EXECUTION_FAILED) because the optimizer sees 4-bit
-        # tensors it cannot scale.
+        fp16=True,
     )
 
     trainer = Trainer(
