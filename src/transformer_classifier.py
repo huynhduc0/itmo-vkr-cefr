@@ -65,8 +65,30 @@ def get_training_args(
     warmup_ratio: float = TRANSFORMER_CONFIG["warmup_ratio"],
     seed: int = RANDOM_SEED,
 ):
-    """Build HuggingFace TrainingArguments."""
+    """Build HuggingFace TrainingArguments.
+
+    Mixed precision is auto-detected from the GPU:
+    - sm_80+ (A100, H100): bf16=True  (native, fastest)
+    - sm_60–sm_75 (P100, T4): fp16=True  (AMP via GradScaler)
+    - CPU: no mixed precision
+
+    IMPORTANT: Do NOT set the ACCELERATE_MIXED_PRECISION env var alongside
+    fp16/bf16 in TrainingArguments. The env var causes Accelerate to cast all
+    model parameters to fp16, after which GradScaler sees fp16 params/grads
+    and raises "Attempting to unscale FP16 gradients".
+    TrainingArguments(fp16=True) handles AMP correctly: params stay fp32 and
+    only the forward pass runs under fp16 autocast.
+    """
+    import torch
     from transformers import TrainingArguments
+
+    if torch.cuda.is_available():
+        # bf16 needs compute capability >= 8.0 for native hardware support
+        use_bf16 = torch.cuda.get_device_capability()[0] >= 8
+        use_fp16 = not use_bf16
+    else:
+        use_fp16 = False
+        use_bf16 = False
 
     return TrainingArguments(
         output_dir=output_dir,
@@ -83,7 +105,8 @@ def get_training_args(
         greater_is_better=True,
         seed=seed,
         logging_steps=50,
-        fp16=False,
+        fp16=use_fp16,
+        bf16=use_bf16,
     )
 
 

@@ -57,7 +57,7 @@ TRANSFORMER_CONFIG = {
 
 # LLM + LoRA hyperparameters
 LLM_CONFIG = {
-    "base_model": "meta-llama/Llama-3.2-3B-Instruct",
+    "base_model": "meta-llama/Llama-3.2-1B-Instruct",
     "lora_r": 16,
     "lora_alpha": 32,
     "lora_dropout": 0.05,
