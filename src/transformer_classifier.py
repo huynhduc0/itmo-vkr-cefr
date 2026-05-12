@@ -82,13 +82,12 @@ def get_training_args(
     import torch
     from transformers import TrainingArguments
 
-    if torch.cuda.is_available():
-        # bf16 needs compute capability >= 8.0 for native hardware support
-        use_bf16 = torch.cuda.get_device_capability()[0] >= 8
-        use_fp16 = not use_bf16
-    else:
-        use_fp16 = False
-        use_bf16 = False
+    # DeBERTa-v3 uses weight-tied embeddings whose gradients come out as fp16
+    # even in standard AMP, causing GradScaler to raise
+    # "Attempting to unscale FP16 gradients". Run in fp32 — DeBERTa-v3-base
+    # (184 M params) is fast enough on T4/P100 without mixed precision.
+    use_fp16 = False
+    use_bf16 = False
 
     return TrainingArguments(
         output_dir=output_dir,
