@@ -55,17 +55,23 @@ def load_llm(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Use {"": 0} instead of "auto" to keep all layers on GPU 0.
+    # "auto" spreads layers across all visible GPUs; HuggingFace Trainer then
+    # fails with "parameters on device cuda:1" because it uses DataParallel
+    # which requires every parameter on device_ids[0].
+    device_map = {"": 0}
+
     if use_4bit:
         bnb_config = build_bnb_config()
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map=device_map,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            device_map="auto",
+            device_map=device_map,
         )
     return model, tokenizer
 
