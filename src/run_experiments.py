@@ -838,10 +838,10 @@ def run_exp14(
         r = pair[1]
         runs.append(r)
         latencies.append(r.latency)
-        print(
-            f"  [seed={cur_seed}] QWK={r.qwk:.4f}  Acc={r.accuracy:.4f}"
-            f"  F1={r.macro_f1:.4f}  MAE={r.mae:.4f}"
-        )
+        print(f"\n{'='*50}")
+        print(f"  EXP14 | seed={cur_seed} | round {delta+1}/2")
+        print(f"  QWK={r.qwk:.4f}  Acc={r.accuracy:.4f}  F1={r.macro_f1:.4f}  MAE={r.mae:.4f}")
+        print(f"{'='*50}\n")
 
         # Free GPU memory before next round
         gc.collect()
