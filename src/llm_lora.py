@@ -100,13 +100,6 @@ def apply_lora(model, lora_config=None):
         lora_config = build_lora_config()
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
-
-    # get_peft_model drops hf_device_map → Trainer falls back to DataParallel
-    # which crashes when base model spans multiple GPUs ("parameters on cuda:1").
-    # These flags tell Trainer the model manages its own device layout.
-    model.is_parallelizable = True
-    model.model_parallel = True
-
     return model
 
 
@@ -258,11 +251,7 @@ def train_llm_lora(
         save_strategy="epoch",
         seed=seed,
         logging_steps=50,
-        # Do NOT set fp16=True for QLoRA. The 4-bit model already sets its
-        # compute dtype via BitsAndBytesConfig(bnb_4bit_compute_dtype=float16).
-        # Adding fp16=True on the Trainer causes dtype mismatches inside cuBLAS
-        # (CUBLAS_STATUS_EXECUTION_FAILED) because the optimizer sees 4-bit
-        # tensors it cannot scale.
+        fp16=True,
     )
 
     trainer = Trainer(
