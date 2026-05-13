@@ -822,6 +822,7 @@ def run_exp14(
     runs = []
     latencies = []
     for delta in [0, 1]:
+        cur_seed = seed + delta
         pair = run_exp4(
             train_texts=train_texts,
             train_labels=train_labels,
@@ -831,12 +832,16 @@ def run_exp14(
             test_labels=test_labels,
             track=track,
             language=language,
-            seed=seed + delta,
+            seed=cur_seed,
         )
         # Use constrained decoding result (index 1) as the primary for averaging
         r = pair[1]
         runs.append(r)
         latencies.append(r.latency)
+        print(
+            f"  [seed={cur_seed}] QWK={r.qwk:.4f}  Acc={r.accuracy:.4f}"
+            f"  F1={r.macro_f1:.4f}  MAE={r.mae:.4f}"
+        )
 
         # Free GPU memory before next round
         gc.collect()
