@@ -816,9 +816,12 @@ def run_exp14(
     language: str = "en",
     seed: int = RANDOM_SEED,
 ) -> ExperimentResult:
+    import gc
+    import torch
+
     runs = []
     latencies = []
-    for delta in [0, 1, 2]:
+    for delta in [0, 1]:
         pair = run_exp4(
             train_texts=train_texts,
             train_labels=train_labels,
@@ -835,6 +838,11 @@ def run_exp14(
         runs.append(r)
         latencies.append(r.latency)
 
+        # Free GPU memory before next round
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     # Aggregate by metric averaging as a stable proxy of self-consistency.
     return ExperimentResult(
         name="Exp 14 – LLM+LoRA Self-Consistency",
@@ -844,7 +852,7 @@ def run_exp14(
         qwk=float(np.mean([v.qwk for v in runs])),
         mae=float(np.mean([v.mae for v in runs])),
         latency=float(np.mean(latencies)),
-        note="mean over 3 seeds",
+        note="mean over 2 seeds",
     )
 
 
