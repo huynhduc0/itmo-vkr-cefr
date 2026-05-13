@@ -55,10 +55,10 @@ def load_llm(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Use {"": 0} instead of "auto" to keep all layers on GPU 0.
-    # "auto" spreads layers across all visible GPUs; HuggingFace Trainer then
-    # fails with "parameters on device cuda:1" because it uses DataParallel
-    # which requires every parameter on device_ids[0].
+    # Force all layers onto GPU 0. device_map="auto" splits across all visible
+    # GPUs; with fp16=True the cross-GPU dequantize→compute path produces a
+    # CUDA_R_16F/CUDA_R_32F mismatch that cuBLAS rejects. Single-GPU avoids
+    # this: 3B in 4-bit is ~2 GB, well within T4's 16 GB.
     device_map = {"": 0}
 
     if use_4bit:
