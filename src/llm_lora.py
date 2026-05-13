@@ -318,8 +318,10 @@ def predict_llm_constrained(
         for level in CEFR_LEVELS
     }
 
+    from tqdm.auto import tqdm
+
     predictions = []
-    for text in texts:
+    for text in tqdm(texts, desc="Constrained decoding", leave=False):
         prompt = format_prompt(text, task, language)
         prompt_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
         prompt_len = prompt_ids.shape[1]
