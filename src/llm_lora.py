@@ -320,33 +320,37 @@ def predict_llm_constrained(
 
     from tqdm.auto import tqdm
 
+    levels = list(label_token_seqs.keys())
     predictions = []
     for text in tqdm(texts, desc="Constrained decoding", leave=False):
         prompt = format_prompt(text, task, language)
-        prompt_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
-        prompt_len = prompt_ids.shape[1]
+        prompt_ids = tokenizer.encode(prompt, add_special_tokens=True)
+        prompt_len = len(prompt_ids)
 
-        best_level = CEFR_LEVELS[0]
+        # Build batch of 6 sequences (prompt + each label) and pad to same length
+        seqs = [prompt_ids + label_token_seqs[lv] for lv in levels]
+        max_len = max(len(s) for s in seqs)
+        input_ids = torch.zeros(len(levels), max_len, dtype=torch.long, device=device)
+        attn_mask = torch.zeros(len(levels), max_len, dtype=torch.long, device=device)
+        for i, s in enumerate(seqs):
+            input_ids[i, :len(s)] = torch.tensor(s, device=device)
+            attn_mask[i, :len(s)] = 1
+
+        with torch.no_grad():
+            logits = model(input_ids, attention_mask=attn_mask).logits  # (6, max_len, vocab)
+
+        # Sum log-probs for each label's tokens
+        best_level = levels[0]
         best_log_prob = float("-inf")
-
-        for level, tok_ids in label_token_seqs.items():
-            label_ids = torch.tensor([tok_ids], device=device)
-            full_ids = torch.cat([prompt_ids, label_ids], dim=1)
-
-            with torch.no_grad():
-                outputs = model(full_ids)
-                logits = outputs.logits  # (1, seq_len, vocab)
-
-            # Sum log-probs: position (prompt_len - 1 + i) predicts tok_ids[i]
+        for i, lv in enumerate(levels):
+            tok_ids = label_token_seqs[lv]
             log_prob = 0.0
-            for i, tid in enumerate(tok_ids):
-                pos = prompt_len - 1 + i
-                log_softmax = torch.log_softmax(logits[0, pos, :], dim=-1)
-                log_prob += log_softmax[tid].item()
-
+            for j, tid in enumerate(tok_ids):
+                pos = prompt_len - 1 + j
+                log_prob += torch.log_softmax(logits[i, pos, :], dim=-1)[tid].item()
             if log_prob > best_log_prob:
                 best_log_prob = log_prob
-                best_level = level
+                best_level = lv
 
         predictions.append(LABEL2ID[best_level])
     return np.array(predictions)
