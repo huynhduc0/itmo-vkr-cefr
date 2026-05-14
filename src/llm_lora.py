@@ -221,7 +221,7 @@ def train_llm_lora(
     Returns:
         (trainer, model, tokenizer)
     """
-    from transformers import DataCollatorForLanguageModeling, Trainer, TrainerCallback, TrainingArguments
+    from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
 
     from src.data_utils import set_seed
 
@@ -254,36 +254,12 @@ def train_llm_lora(
         fp16=True,
     )
 
-    class CEFRMetricCallback(TrainerCallback):
-        def on_epoch_end(self, args, state, control, **kwargs):
-            if not val_texts:
-                return
-            from sklearn.metrics import accuracy_score, f1_score
-            from sklearn.metrics import cohen_kappa_score, mean_absolute_error
-            try:
-                eval_model = kwargs.get("model", model)
-                eval_model = getattr(eval_model, "module", eval_model)
-                preds = predict_llm_constrained(eval_model, tokenizer, val_texts, task=task, language=language)
-                sep = "-" * 55
-                print(sep)
-                print(
-                    f"  Epoch {int(state.epoch)} | Val (n={len(val_texts)})"
-                    f"  QWK={cohen_kappa_score(val_labels, preds, weights='quadratic'):.4f}"
-                    f"  Acc={accuracy_score(val_labels, preds):.4f}"
-                    f"  F1={f1_score(val_labels, preds, average='macro', zero_division=0):.4f}"
-                    f"  MAE={mean_absolute_error(val_labels, preds):.4f}"
-                )
-                print(sep)
-            except Exception as e:
-                print(f"  [callback] metric skipped: {e}")
-
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         data_collator=data_collator,
-        callbacks=[CEFRMetricCallback()],
     )
     trainer.train()
     return trainer, model, tokenizer
