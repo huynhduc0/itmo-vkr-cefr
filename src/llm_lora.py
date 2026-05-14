@@ -254,8 +254,8 @@ def train_llm_lora(
         fp16=True,
     )
 
-    _val_sample_texts  = val_texts[:200]  if val_texts  else []
-    _val_sample_labels = val_labels[:200] if val_labels else []
+    _val_sample_texts  = val_texts[:1000]  if val_texts  else []
+    _val_sample_labels = val_labels[:1000] if val_labels else []
 
     class CEFRMetricCallback(TrainerCallback):
         def on_epoch_end(self, args, state, control, **kwargs):
