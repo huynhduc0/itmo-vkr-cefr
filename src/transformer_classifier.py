@@ -100,6 +100,7 @@ def get_training_args(
         warmup_ratio=warmup_ratio,
         eval_strategy="epoch",
         save_strategy="epoch",
+        save_total_limit=1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_qwk",
         greater_is_better=True,
